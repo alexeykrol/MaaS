@@ -1,6 +1,35 @@
 # MaaS MVP - Memory as a Service
 
-Event-Driven AI Mentor with Long-term Semantic Memory
+<div align="center">
+
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/)
+
+[![Status](https://img.shields.io/badge/Status-MVP%20v1.0-success?style=for-the-badge)](https://github.com/alexeykrol/MaaS)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+[![Event-Driven](https://img.shields.io/badge/Architecture-Event--Driven-orange?style=for-the-badge)](ARCHITECTURE.md)
+[![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen?style=for-the-badge)](scripts/)
+
+</div>
+
+---
+
+**Event-Driven AI System with Long-term Semantic Memory**
+
+> 🧠 Building an AI that remembers: A memory-as-a-service system powered by PostgreSQL event-driven architecture and OpenAI.
+
+## ✨ Key Features
+
+- 🧠 **Long-term Memory**: LSM storage with semantic tags and time-bucketed summaries
+- ⚡ **Event-Driven**: PostgreSQL LISTEN/NOTIFY for real-time agent coordination
+- 🔄 **Auto-Summarization**: Archivist agent converts conversation logs to compressed memories
+- 🎯 **Context Assembly**: Smart context building from LSM + recent conversations
+- 🤖 **OpenAI Integration**: GPT-4o-mini powered responses with full memory context
+- 📊 **Blackboard Pattern**: Agents communicate through shared database state
+- ✅ **Fully Tested**: End-to-end tests validate complete memory cycle
+- 🔒 **Idempotent**: Safe task processing with automatic retries
 
 ## Architecture Overview
 
