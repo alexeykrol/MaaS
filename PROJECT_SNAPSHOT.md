@@ -1,6 +1,6 @@
 # PROJECT SNAPSHOT — Текущее состояние проекта
 
-*Последнее обновление: 2025-11-25*
+*Последнее обновление: 2025-11-26*
 
 > **Процесс обновления этого файла:** см. [`PROCESS.md`](./PROCESS.md)
 >
@@ -87,9 +87,24 @@ MaaS2/
 ├── .env.example                   ✅
 ├── package.json                   ✅
 ├── tsconfig.json                  ✅
+├── docs/
+│   └── selflearn/                 ✅ Self-Learning System docs
+│       ├── README.md              ✅ Meta-document (overview)
+│       ├── CYCLES.md              ✅ Learning cycles (micro/macro/deep)
+│       ├── EXPERIMENTS.md         ✅ A/B testing structure
+│       ├── AUTONOMY.md            ✅ Parameter boundaries
+│       ├── GOLDEN_DATASET.md      ✅ Test structure
+│       ├── MANAGER.md             ✅ Manager role spec
+│       ├── TEACHER.md             ✅ Teacher/Evaluator spec
+│       ├── TUNER.md               ✅ Tuner module spec
+│       ├── USER EMULATOR.md       ✅ User simulation spec
+│       └── Системы и ролей.md     ✅ Roles interaction diagram
 ├── ARCHITECTURE.md                ✅
 ├── BACKLOG.md                     ✅
 ├── PIPELINE.md                    ✅
+├── ROADMAP.md                     ✅ Development roadmap (phases)
+├── METRICS.md                     ✅ Quality metrics definitions
+├── IMPACTS.md                     ✅ Tunable parameters
 ├── README.md                      ✅
 ├── CLAUDE.md                      ✅
 ├── PROJECT_INTAKE.md              ✅
@@ -224,8 +239,12 @@ MaaS2/
 
 ### Важные документы:
 - `ARCHITECTURE.md` — детальная архитектура системы
-- `BACKLOG.md` — план разработки по шагам
+- `BACKLOG.md` — план разработки по шагам (Phase 1-3)
 - `PIPELINE.md` — описание state machine
+- `ROADMAP.md` — приоритизированный план развития
+- `METRICS.md` — метрики качества системы
+- `IMPACTS.md` — настраиваемые параметры
+- `docs/selflearn/README.md` — система самообучения (обзор)
 - `PROCESS.md` — процесс обновления метафайлов
 - `Test/TEST_REGISTRY.md` — реестр всех тестов (34 теста)
 - `Test/TEST_LOG.md` — история выполнения тестов
@@ -268,7 +287,38 @@ Event-Driven AI система с долгосрочной семантичес�
 
 ---
 
+## 🔜 Следующий этап: Phase 2 - Measurement Foundation
+
+> **Цель:** Понимать, насколько хорошо работает MaaS. Объективно, с цифрами.
+
+### Ближайшие задачи:
+
+| Шаг | Название | Что делает |
+|-----|----------|------------|
+| 12 | Telemetry | Таблица `telemetry_events`, сбор latency/tokens/hit_rate |
+| 13 | Golden Dataset | 50+ тестовых примеров с expected_memory_ids |
+| 14 | LLM-Judge | Оценка relevance, utilization, hallucinations |
+| 15 | Metrics Dashboard | Агрегации, визуализация, `/api/metrics` |
+
+### После Phase 2 → Phase 3: Self-Learning System
+
+- Tuner (применение параметров)
+- User Emulator (генерация диалогов)
+- Teacher (анализ, гипотезы, эксперименты)
+- Manager (координация, отчёты)
+
+**Детали:** см. [ROADMAP.md](./ROADMAP.md), [docs/selflearn/README.md](./docs/selflearn/README.md)
+
+---
+
 ## История обновлений
+
+### 2025-11-26 - Self-Learning Documentation
+- Создана директория `docs/selflearn/` с полной документацией системы самообучения
+- Добавлены: MANAGER.md, TEACHER.md, TUNER.md, USER EMULATOR.md, "Системы и ролей.md"
+- Создан ROADMAP.md с приоритизированным планом развития
+- Обновлены: BACKLOG.md (Phase 2 + Phase 3), CLAUDE.md, PROJECT_SNAPSHOT.md
+- Следующий этап: Phase 2 - Measurement Foundation (Telemetry → Golden Dataset → LLM-Judge)
 
 ### 2025-11-26 - MVP COMPLETED 🎉
 - Steps 10-11 завершены (Assembler v2 + Polish)

@@ -112,25 +112,37 @@ MaaS2/
 
 ## Development Workflow
 
-### Phase 1-3: MVP (Backend Only) - **32-48 hours**
+### Phase 1: MVP (Backend) ✅ COMPLETED
 
-#### Phase 1: Core Infrastructure
-1. ✅ **Step 0**: Project preparation (structure, dependencies, Supabase)
-2. ✅ **Step 1**: Database schema (6 tables + triggers + seeds)
-3. ✅ **Step 2**: Test Runner (mock mode) - **PRIORITY!**
-4. **Step 3**: Orchestrator (LISTEN/NOTIFY logic)
-5. **Step 4**: Agent Stubs (status-changing placeholders)
+> **Status:** 100% (12/12 steps) — End-to-end pipeline working!
 
-#### Phase 2: Real Implementations
-6. **Step 5**: Analyzer implementation (query analysis + LSM search)
-7. **Step 6**: Assembler implementation (context builder)
-8. **Step 7**: Final Responder implementation (LLM caller)
-9. **Step 8**: Logger + Archivist (background processing)
+All MVP steps completed:
+- ✅ Steps 0-2: Infrastructure (DB, Test Runner)
+- ✅ Steps 3-5: Orchestrator, Agent Stubs, Logger
+- ✅ Steps 6-8: Real Analyzer, Assembler, FinalResponder
+- ✅ Steps 9-11: Archivist, Assembler v2, Polish
 
-#### Phase 3: Polish
-10. **Step 9**: Error handling + retries
-11. **Step 10**: Monitoring + metrics
-12. **Step 11**: Security + rate limiting
+### Phase 2: Measurement Foundation 🔜 NEXT
+
+> **Goal:** Understand how well MaaS performs with objective metrics.
+
+| Step | Name | What it does |
+|------|------|--------------|
+| 12 | Telemetry | `telemetry_events` table, latency/tokens/hit_rate collection |
+| 13 | Golden Dataset | 50+ test examples with expected_memory_ids |
+| 14 | LLM-Judge | Evaluate relevance, utilization, hallucinations |
+| 15 | Metrics Dashboard | Aggregations, visualization, `/api/metrics` |
+
+### Phase 3: Self-Learning System
+
+> **Goal:** MaaS improves automatically through experiments.
+
+- **Tuner**: Apply/rollback parameters safely
+- **User Emulator**: Generate synthetic dialogs
+- **Teacher**: Analyze metrics, form hypotheses, run experiments
+- **Manager**: Coordinate, generate reports
+
+**Details:** See [ROADMAP.md](./ROADMAP.md), [docs/selflearn/](./docs/selflearn/README.md)
 
 ### Phase 4: Frontend Integration (Post-MVP) - **27-36 hours**
 
@@ -209,7 +221,9 @@ Each module is validated with Test Runner before moving to the next step.
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)**: System architecture (modules, requirements, interfaces)
 - **[PIPELINE.md](./PIPELINE.md)**: Processes and interactions (state machine, triggers, flows)
-- **[BACKLOG.md](./BACKLOG.md)**: Development roadmap (steps, success criteria, time estimates)
+- **[BACKLOG.md](./BACKLOG.md)**: Development plan (Phase 1-3, all steps with checklists)
+- **[ROADMAP.md](./ROADMAP.md)**: Prioritized roadmap (what to do next)
+- **[docs/selflearn/](./docs/selflearn/README.md)**: Self-learning system (roles, cycles, experiments)
 
 ## License
 

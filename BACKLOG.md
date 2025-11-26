@@ -17,14 +17,22 @@
 12. [Шаг 10: Assembler v2 (с LSM)](#шаг-10-assembler-v2-с-lsm)
 13. [Шаг 11: Полировка](#шаг-11-полировка)
 
-### Phase 4: Frontend Integration (Post-MVP)
-14. [Шаг 12: Frontend Setup](#шаг-12-frontend-setup)
-15. [Шаг 13: Authentication UI](#шаг-13-authentication-ui)
-16. [Шаг 14: Chat Interface](#шаг-14-chat-interface)
-17. [Шаг 15: Realtime Updates](#шаг-15-realtime-updates)
-18. [Шаг 16: History & Search](#шаг-16-history--search)
-19. [Шаг 17: Admin Panel](#шаг-17-admin-panel)
-20. [Шаг 18: Polish & Deploy](#шаг-18-polish--deploy)
+### Phase 2: Measurement Foundation (Post-MVP)
+14. [Шаг 12: Telemetry](#шаг-12-telemetry)
+15. [Шаг 13: Golden Dataset](#шаг-13-golden-dataset)
+16. [Шаг 14: LLM-Judge](#шаг-14-llm-judge)
+17. [Шаг 15: Metrics Dashboard](#шаг-15-metrics-dashboard)
+
+### Phase 3: Self-Learning System
+18. [Шаг 16: Tuner](#шаг-16-tuner)
+19. [Шаг 17: User Emulator](#шаг-17-user-emulator)
+20. [Шаг 18: Teacher](#шаг-18-teacher)
+21. [Шаг 19: Manager](#шаг-19-manager)
+
+### Phase 4: Frontend Integration
+22. [Шаг 20: Frontend Setup](#шаг-20-frontend-setup)
+23. [Шаг 21: Chat Interface](#шаг-21-chat-interface)
+24. [Шаг 22: Admin Panel](#шаг-22-admin-panel)
 
 ---
 
@@ -1589,6 +1597,184 @@ VITE_SUPABASE_ANON_KEY=eyJ...    # Frontend использует
 
 ---
 
-**Версия документа**: 3.0 (added Frontend Integration phase)
-**Дата**: 2025-11-25
-**Статус**: MVP готов к реализации, Frontend - roadmap
+## Phase 2: Measurement Foundation
+
+> **Цель:** Понимать, насколько хорошо работает MaaS. Объективно, с цифрами.
+>
+> **Prerequisite:** Phase 1 (MVP) завершён ✅
+>
+> **Документация:** [ROADMAP.md](./ROADMAP.md), [METRICS.md](./METRICS.md)
+
+---
+
+## Шаг 12: Telemetry
+
+### Цель
+Добавить сбор метрик после каждого pipeline run.
+
+### Задачи
+
+- [ ] Создать таблицу `telemetry_events` (см. [CYCLES.md](./docs/selflearn/CYCLES.md))
+- [ ] Добавить запись метрик в FinalResponder после завершения
+- [ ] Записывать: `latency_ms`, `prompt_tokens`, `completion_tokens`, `hit_rate`
+- [ ] Создать индексы для быстрой аналитики
+
+### Артефакты
+- `db/migrations/telemetry.sql`
+- `src/utils/telemetry.ts`
+
+---
+
+## Шаг 13: Golden Dataset
+
+### Цель
+Создать набор тестовых примеров с ожидаемыми результатами.
+
+### Задачи
+
+- [ ] Добавить поля в `test_dialogs`: `expected_memory_ids UUID[]`, `category`, `difficulty`
+- [ ] Создать 50+ тестовых примеров по категориям:
+  - Factual Recall
+  - Preference Inference
+  - Temporal Reasoning
+  - Multi-hop
+  - Negative Cases
+- [ ] Создать функцию `evaluateOnGoldenDataset()`
+
+### Артефакты
+- `db/seeds/golden_dataset.sql`
+- `src/test-runner/evaluator.ts`
+
+### Документация
+- [GOLDEN_DATASET.md](./docs/selflearn/GOLDEN_DATASET.md)
+
+---
+
+## Шаг 14: LLM-Judge
+
+### Цель
+Автоматическая оценка качества через LLM.
+
+### Задачи
+
+- [ ] Создать файл промптов `prompts/llm_judge.md`
+- [ ] Создать модуль `src/utils/llmJudge.ts` с функциями:
+  - `judgeRetrievalRelevance()`
+  - `judgeContextUtilization()`
+  - `detectHallucination()`
+- [ ] Интегрировать в telemetry (записывать результаты)
+
+### Документация
+- [GOLDEN_DATASET.md](./docs/selflearn/GOLDEN_DATASET.md#llm-judge)
+
+---
+
+## Шаг 15: Metrics Dashboard
+
+### Цель
+Визуализация метрик качества.
+
+### Задачи
+
+- [ ] Создать SQL агрегации для precision, recall, latency P50/P95
+- [ ] Добавить endpoint `GET /api/metrics`
+- [ ] Создать простой HTML dashboard или CLI reporter
+
+### Документация
+- [METRICS.md](./METRICS.md)
+
+---
+
+## Phase 3: Self-Learning System
+
+> **Цель:** MaaS улучшается автоматически через эксперименты.
+>
+> **Prerequisite:** Phase 2 (Measurement) завершён
+>
+> **Документация:** [docs/selflearn/README.md](./docs/selflearn/README.md)
+
+---
+
+## Шаг 16: Tuner
+
+### Цель
+Безопасное применение и откат параметров.
+
+### Задачи
+
+- [ ] Использовать существующую таблицу `experiment_parameters`
+- [ ] Создать модуль `src/selflearn/tuner.ts`:
+  - `applyParameters(changes)`
+  - `rollbackParameters()`
+  - `validateBoundaries(param, value)`
+- [ ] Добавить safety guards (диапазоны, cooldown)
+
+### Документация
+- [TUNER.md](./docs/selflearn/TUNER.md)
+- [AUTONOMY.md](./docs/selflearn/AUTONOMY.md)
+
+---
+
+## Шаг 17: User Emulator
+
+### Цель
+Генерация синтетических диалогов для обучения.
+
+### Задачи
+
+- [ ] Создать `sim_scenarios.json` с проектами/целями
+- [ ] Создать `sim_personas.json` с профилями пользователей
+- [ ] Создать модуль `src/selflearn/emulator.ts`:
+  - `generateDialog(scenario, persona)`
+  - `runSimulation(count)`
+- [ ] Интегрировать с MaaS pipeline
+
+### Документация
+- [USER EMULATOR.md](./docs/selflearn/USER%20EMULATOR.md)
+
+---
+
+## Шаг 18: Teacher
+
+### Цель
+Анализ качества и формирование гипотез.
+
+### Задачи
+
+- [ ] Создать модуль `src/selflearn/teacher.ts`:
+  - `analyzeMetrics()`
+  - `formHypothesis()`
+  - `designExperiment()`
+  - `evaluateExperiment()`
+- [ ] Интегрировать с LLM-Judge для оценки
+- [ ] Формировать рекомендации для Tuner
+
+### Документация
+- [TEACHER.md](./docs/selflearn/TEACHER.md)
+- [EXPERIMENTS.md](./docs/selflearn/EXPERIMENTS.md)
+
+---
+
+## Шаг 19: Manager
+
+### Цель
+Координация всех компонентов selflearn.
+
+### Задачи
+
+- [ ] Создать модуль `src/selflearn/manager.ts`:
+  - `setGoals(goals)`
+  - `runLearningCycle()`
+  - `generateReport()`
+- [ ] Интегрировать с Teacher, Tuner, Emulator
+- [ ] Создать CLI для управления
+
+### Документация
+- [MANAGER.md](./docs/selflearn/MANAGER.md)
+- [Системы и ролей.md](./docs/selflearn/Системы%20и%20ролей.md)
+
+---
+
+**Версия документа**: 4.0 (added Phase 2 Measurement + Phase 3 Self-Learning)
+**Дата**: 2025-11-26
+**Статус**: MVP завершён ✅, Phase 2 - следующий этап
