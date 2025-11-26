@@ -20,11 +20,11 @@
 | 6 | Analyzer | 4 | 4 | 0 | ✅ 100% |
 | 7 | Assembler | 4 | 4 | 0 | ✅ 100% |
 | 8 | FinalResponder | 5 | 5 | 0 | ✅ 100% |
-| 9 | Archivist | 0 | 0 | 0 | ⏳ 0% |
+| 9 | Archivist | 4 | 4 | 0 | ✅ 100% |
 | 10 | Assembler v2 | 0 | 0 | 0 | ⏳ 0% |
 | 11 | Polish | 0 | 0 | 0 | ⏳ 0% |
 
-**Всего тестов:** 34 | **Passed:** 34 | **Failed:** 0
+**Всего тестов:** 38 | **Passed:** 38 | **Failed:** 0
 
 ---
 
@@ -143,16 +143,16 @@
 
 ---
 
-## Step 9: Archivist (⏳ Pending)
+## Step 9: Archivist ✅
 
 | ID | Тест | Статус | Сценарий |
 |----|------|--------|----------|
-| T9.1 | Чтение raw_logs для архивации | ⏳ | [archivist.md](scenarios/archivist.md) |
-| T9.2 | Суммаризация через LLM | ⏳ | [archivist.md](scenarios/archivist.md) |
-| T9.3 | Извлечение semantic_tags | ⏳ | [archivist.md](scenarios/archivist.md) |
-| T9.4 | Запись в lsm_storage | ⏳ | [archivist.md](scenarios/archivist.md) |
+| T9.1 | Чтение raw_logs для архивации | ✅ | [archivist.md](scenarios/archivist.md) |
+| T9.2 | Суммаризация через LLM | ✅ | [archivist.md](scenarios/archivist.md) |
+| T9.3 | Извлечение semantic_tags | ✅ | [archivist.md](scenarios/archivist.md) |
+| T9.4 | Запись в lsm_storage | ✅ | [archivist.md](scenarios/archivist.md) |
 
-**Зависимости:** Steps 0-8
+**Команда:** Автоматически после COMPLETED в Orchestrator
 
 ---
 

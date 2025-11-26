@@ -1,7 +1,7 @@
 import { Client } from 'pg';
 import { pool } from '../utils/db';
 import { logger } from '../utils/logger';
-import { runAnalyzer, runAssembler, runFinalResponder } from '../agents';
+import { runAnalyzer, runAssembler, runFinalResponder, runArchivist } from '../agents';
 
 /**
  * Pipeline Event from NOTIFY
@@ -101,6 +101,9 @@ export class Orchestrator {
 
         case 'COMPLETED':
           logger.info(`✅ [Orchestrator] Request completed: ${id}`);
+          // Запускаем Archivist для создания долгосрочной памяти
+          logger.info(`➡️  [Orchestrator] Routing to Archivist: ${id}`);
+          await runArchivist(id);
           break;
 
         case 'FAILED':
