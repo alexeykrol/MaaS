@@ -446,25 +446,188 @@ GDPR compliance: юзер должен иметь контроль.
 
 ---
 
-## Приоритезация (первичная)
+## 8. Идеи от Codex
 
-### Must Have (для "умной" памяти)
-1. Vector embeddings + pgvector
-2. User profile entity
-3. Retrieval quality metrics
-4. Memory isolation audit
+> *Добавлено: 2025-11-26*
 
-### Should Have
-5. Temporal reasoning
-6. Preference extraction
-7. Async Archivist
-8. User data control (GDPR)
+### 8.1 Hybrid Reranker
 
-### Nice to Have
-9. Multi-hop retrieval
-10. Memory decay
-11. A/B testing framework
-12. Memory transparency UI
+**[ПРИОРИТЕТ] [ГИПОТЕЗА]**
+
+После vector/BM25 retrieval — LLM-judge для отсева шума и ранжирования релевантности.
+
+**Зачем:** Особенно важно на мульти-тематичных логах, где vector search может вернуть "похожее, но не то".
+
+**Реализация:**
+1. Retrieve top-20 candidates (fast, cheap)
+2. LLM reranker: "Which of these are relevant to: {query}?" → top-5
+3. Use top-5 in context
+
+---
+
+### 8.2 Topic Graph
+
+**[ГИПОТЕЗА]**
+
+Поверх LSM хранить граф связей: `topic → facts → entities`.
+
+**Зачем:** Multi-hop retrieval без галлюцинаций. Консолидация в узлы.
+
+**Пример:**
+```
+[User: John] --works_at--> [Company: Acme]
+     |                           |
+     +--prefers--> [Lang: Python]
+                                 |
+[Company: Acme] --industry--> [AI/ML]
+```
+
+**Query:** "What do I do?" → traverse graph → "You work at Acme (AI company), prefer Python"
+
+---
+
+### 8.3 Cold Start Seeding
+
+**[РЕШЕНИЕ]**
+
+Быстрый импорт внешних знаний в LSM:
+- Файлы (PDF, MD, TXT)
+- Notion pages
+- Google Drive docs
+
+**Реализация:**
+1. Document ingestion pipeline
+2. Chunking + auto-tagging (LLM)
+3. Embedding generation
+4. Bulk insert в LSM с `source_type: "imported"`
+
+**Зачем:** Юзер может сразу "загрузить контекст" без долгих разговоров.
+
+---
+
+### 8.4 Cost/Latency Budget
+
+**[ПРИОРИТЕТ] [РЕШЕНИЕ]**
+
+Планировщик вызовов LLM в зависимости от запроса и нагрузки.
+
+**Идея:**
+| Сценарий | Модель | Причина |
+|----------|--------|---------|
+| Simple query | gpt-4o-mini | Дешево, быстро |
+| Complex reasoning | gpt-4o | Качество важнее |
+| Summarization | gpt-4o-mini | Batch, не срочно |
+| Reranking | gpt-4o-mini | Много вызовов |
+| High load | fallback to mini | Cost control |
+
+**Реализация:** Router на основе query complexity + current load.
+
+---
+
+### 8.5 RLS/Tenant Tests
+
+**[ПРИОРИТЕТ] [РЕШЕНИЕ]**
+
+Автотесты на изоляцию `user_id`:
+- SQL-level: RLS policies в Supabase
+- Integration: попытка доступа к чужим данным
+- Regression: запускать при каждом PR
+
+**Зачем:** Не сломать privacy при изменениях кода.
+
+**Тесты:**
+```typescript
+// User A создаёт memory
+// User B пытается получить → должен получить 0
+// User A получает → должен получить 1
+```
+
+---
+
+### 8.6 Safety Filter перед LSM
+
+**[ПРИОРИТЕТ] [РЕШЕНИЕ]**
+
+PII/секреты — detect/redact перед сохранением.
+
+**Реализация:**
+1. Regex patterns: email, phone, SSN, credit card, API keys
+2. LLM classifier: "Does this contain sensitive personal info?"
+3. Action: redact, warn user, or refuse to store
+
+**Пример:**
+```
+Input: "My password is qwerty123"
+Detected: password pattern
+Action: "[REDACTED: password]" или отказ от сохранения
+```
+
+---
+
+### 8.7 Feedback Capture
+
+**[РЕШЕНИЕ]**
+
+Пользователю: "Это было полезно?" → обновление weights.
+
+**Реализация:**
+- UI: thumbs up/down после ответа
+- Backend: update `memory.strength` для использованных memories
+- Effect: при следующем retrieval — релевантные выше
+
+**Данные:**
+```sql
+memory_feedback:
+  - memory_id
+  - pipeline_run_id
+  - rating: 1 (helpful) / -1 (not helpful)
+  - created_at
+```
+
+---
+
+### 8.8 Telemetry для памяти
+
+**[ПРИОРИТЕТ] [РЕШЕНИЕ]**
+
+Метрики для понимания как работает память:
+
+| Метрика | Описание |
+|---------|----------|
+| `lsm_hit_rate` | % запросов где нашлись memories |
+| `lsm_miss_rate` | % запросов без memories |
+| `context_usage_rate` | % ответов где LLM использовал контекст |
+| `naked_response_rate` | % "голых" ответов без памяти |
+| `avg_memories_per_query` | Среднее кол-во memories в контексте |
+| `retrieval_latency_p50/p99` | Время поиска |
+
+**Реализация:** Prometheus metrics + Grafana dashboard.
+
+---
+
+## Приоритезация (обновлённая)
+
+### Must Have (критично для качества)
+1. **Vector embeddings + pgvector** — без этого нет semantic search
+2. **Telemetry для памяти** — без метрик не понять что работает
+3. **RLS/Tenant Tests** — безопасность прежде всего
+4. **Safety Filter (PII)** — не хранить секреты
+5. **Hybrid Reranker** — отсев шума после retrieval
+
+### Should Have (значительное улучшение)
+6. User profile entity
+7. Retrieval quality metrics
+8. Cost/Latency Budget (model router)
+9. Feedback Capture (thumbs up/down)
+10. Temporal reasoning
+11. Cold Start Seeding (import docs)
+
+### Nice to Have (продвинутое)
+12. Topic Graph (knowledge graph)
+13. Multi-hop retrieval
+14. Memory decay & consolidation
+15. A/B testing framework
+16. Memory transparency UI
 
 ---
 
