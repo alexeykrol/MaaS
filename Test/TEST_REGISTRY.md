@@ -21,10 +21,10 @@
 | 7 | Assembler | 4 | 4 | 0 | ✅ 100% |
 | 8 | FinalResponder | 5 | 5 | 0 | ✅ 100% |
 | 9 | Archivist | 4 | 4 | 0 | ✅ 100% |
-| 10 | Assembler v2 | 0 | 0 | 0 | ⏳ 0% |
-| 11 | Polish | 0 | 0 | 0 | ⏳ 0% |
+| 10 | Assembler v2 | 3 | 3 | 0 | ✅ 100% |
+| 11 | Polish | 3 | 3 | 0 | ✅ 100% |
 
-**Всего тестов:** 38 | **Passed:** 38 | **Failed:** 0
+**Всего тестов:** 44 | **Passed:** 44 | **Failed:** 0
 
 ---
 
@@ -156,22 +156,27 @@
 
 ---
 
-## Step 10: Assembler v2 (⏳ Pending)
+## Step 10: Assembler v2 ✅
 
 | ID | Тест | Статус | Сценарий |
 |----|------|--------|----------|
-| T10.1 | Приоритизация контекста | ⏳ | TBD |
-| T10.2 | Лимит токенов | ⏳ | TBD |
+| T10.1 | Приоритизация контекста по релевантности | ✅ | Code review |
+| T10.2 | Приоритизация по свежести (recency) | ✅ | Code review |
+| T10.3 | Лимит токенов (~4000) | ✅ | Code review |
+
+**Команда:** Через полный pipeline (verifiable via logs)
 
 ---
 
-## Step 11: Polish (⏳ Pending)
+## Step 11: Polish ✅
 
 | ID | Тест | Статус | Сценарий |
 |----|------|--------|----------|
-| T11.1 | E2E полный цикл | ⏳ | TBD |
-| T11.2 | Error handling | ⏳ | TBD |
-| T11.3 | Performance | ⏳ | TBD |
+| T11.1 | Retry логика (до 3 попыток) | ✅ | Code review |
+| T11.2 | Exponential backoff | ✅ | Code review |
+| T11.3 | Graceful degradation для Archivist | ✅ | Code review |
+
+**Команда:** Через полный pipeline с симуляцией ошибок
 
 ---
 

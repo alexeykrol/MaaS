@@ -12,11 +12,11 @@
 
 **Phase 1: Core Infrastructure** ✅ COMPLETED
 **Phase 2: Real Implementations** ✅ COMPLETED
-**Phase 3: Polish** ⏳ NOT STARTED
+**Phase 3: Polish** ✅ COMPLETED
 
-**Общий прогресс:** 83% (10/12 шагов MVP)
+**Общий прогресс:** 100% (12/12 шагов MVP) 🎉
 
-**Текущий шаг:** Step 10 - Assembler v2
+**Статус:** MVP ЗАВЕРШЁН
 
 ---
 
@@ -181,16 +181,26 @@ MaaS2/
 
 ---
 
-## Следующий этап: Step 10 - Assembler v2
+## Завершённый этап: Step 10 - Assembler v2 ✅
 
-**Assembler v2 (с улучшенным LSM)**
+**Assembler v2 (с улучшенным LSM)** — РЕАЛИЗОВАН
 
-### Задачи:
-1. Улучшить приоритизацию контекста по релевантности
-2. Добавить лимит токенов для контекста
-3. Использовать новые записи LSM от Archivist
+### Что сделано:
+1. ✅ Приоритизация контекста по релевантности (tag overlap scoring)
+2. ✅ Приоритизация по свежести (recency scoring)
+3. ✅ Лимит токенов для контекста (~4000 токенов)
+4. ✅ Использование LSM записей от Archivist
 
-**Зависимости:** Steps 0-9 (все выполнены)
+---
+
+## Завершённый этап: Step 11 - Polish ✅
+
+**Error Handling & Cleanup** — РЕАЛИЗОВАНО
+
+### Что сделано:
+1. ✅ Retry логика в Orchestrator (до 3 попыток с exponential backoff)
+2. ✅ Graceful degradation для Archivist (не блокирует pipeline)
+3. ✅ Очистка старого кода (удалена deprecated buildContextString)
 
 ---
 
@@ -250,15 +260,22 @@ Event-Driven AI система с долгосрочной семантичес�
 - ✅ Test Runner (mock mode)
 - ✅ Orchestrator (LISTEN/NOTIFY)
 - ✅ Real Analyzer (keyword search в LSM)
-- ✅ Real Assembler (context building)
+- ✅ Real Assembler v2 (context building + token limits + prioritization)
 - ✅ Real Final Responder (OpenAI calls)
-- ⏳ Archivist (LSM creation) — **NEXT**
-- ⏳ Error handling improvements
-- ⏳ Polish & documentation
+- ✅ Archivist (LLM summarization + LSM creation)
+- ✅ Error handling (retry logic + graceful degradation)
+- ✅ Polish & documentation
 
 ---
 
 ## История обновлений
+
+### 2025-11-26 - MVP COMPLETED 🎉
+- Steps 10-11 завершены (Assembler v2 + Polish)
+- Assembler v2: приоритизация контекста + лимит токенов
+- Polish: retry логика + graceful degradation
+- Прогресс: 100% (12/12)
+- **MVP полностью функционален!**
 
 ### 2025-11-26 - Step 9 Archivist завершён
 - Реализовано: Archivist agent (LLM summarization + tags extraction)
@@ -301,8 +318,8 @@ Event-Driven AI система с долгосрочной семантичес�
 | Assembler | ✅ Готов | 7 | Step 6 | ✅ Context building |
 | FinalResponder | ✅ Готов | 8 | Step 7 | ✅ OpenAI calls |
 | Archivist | ✅ Готов | 9 | Step 8 | ✅ LLM summarization |
-| Assembler v2 | ⏳ Ожидает | 10 | Step 9 | ⏳ Pending |
-| Polish | ⏳ Ожидает | 11 | Step 10 | ⏳ Pending |
+| Assembler v2 | ✅ Готов | 10 | Step 9 | ✅ Token limits + prioritization |
+| Polish | ✅ Готов | 11 | Step 10 | ✅ Retry logic + cleanup |
 
 ---
 

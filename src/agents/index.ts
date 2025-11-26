@@ -122,19 +122,24 @@ function extractSimpleKeywords(query: string): string[] {
 }
 
 /**
- * Assembler Agent - Context Builder
+ * Assembler Agent - Context Builder v2
  *
  * Задача: Сборка контекста для LLM согласно /context/format.md
  * Статусы: ANALYZED → ASSEMBLING → READY
  *
- * Текущая реализация (v0.1):
+ * Реализация v2.0:
  * - Читает analysis_result от Analyzer (memories из LSM)
- * - Читает последние 3 диалога из raw_logs
+ * - Приоритизирует memories по релевантности и свежести
+ * - Читает последние диалоги из raw_logs
+ * - Применяет лимит токенов (~4000 токенов для контекста)
  * - Собирает контекст: SYSTEM ROLE + PREVIOUS CONTEXT (LSM) + RECENT CONVERSATION + CURRENT QUERY
  * - Сохраняет в final_context_payload для FinalResponder
- *
- * TODO v0.2: Умная приоритизация контекста по релевантности
  */
+
+// Constants for token management
+const MAX_CONTEXT_TOKENS = 4000; // Leave room for response
+const CHARS_PER_TOKEN = 4; // Rough estimate: 1 token ≈ 4 chars
+
 export async function runAssembler(pipelineId: string): Promise<void> {
   logger.info(`[Assembler] 📦 Starting for ${pipelineId}`);
 
@@ -157,10 +162,14 @@ export async function runAssembler(pipelineId: string): Promise<void> {
     logger.info(`[Assembler] Building context for: "${run.user_query.substring(0, 50)}..."`);
 
     // Получить результаты анализа (от Analyzer)
-    const analysis = run.analysis_result || { memories: [] };
+    const analysis = run.analysis_result || { memories: [], search_keywords: [] };
+    const searchKeywords = analysis.search_keywords || [];
 
-    // Получить recent conversation из raw_logs
-    // Берем последние 2-3 завершенных диалога (query + answer pairs)
+    // Приоритизировать memories по релевантности
+    const prioritizedMemories = prioritizeMemories(analysis.memories || [], searchKeywords);
+    logger.info(`[Assembler] Prioritized ${prioritizedMemories.length} memories`);
+
+    // Получить recent conversation из raw_logs (только обработанные)
     const logsResult = await pool.query(
       `SELECT
          log_type,
@@ -169,15 +178,18 @@ export async function runAssembler(pipelineId: string): Promise<void> {
        FROM raw_logs
        WHERE user_id = $1
          AND pipeline_run_id != $2
-       ORDER BY created_at ASC`,
+         AND processed = true
+       ORDER BY created_at DESC
+       LIMIT 10`,
       [run.user_id, pipelineId]
     );
 
-    // Группируем логи в пары query-answer (logs ordered ASC, so query comes before answer)
+    // Группируем логи в пары query-answer (reverse to chronological order)
+    const allLogs = logsResult.rows.reverse();
     const recentLogs: Array<{ query: string; answer: string }> = [];
-    for (let i = 0; i < logsResult.rows.length; i += 2) {
-      const queryLog = logsResult.rows[i];
-      const answerLog = logsResult.rows[i + 1];
+    for (let i = 0; i < allLogs.length; i += 2) {
+      const queryLog = allLogs[i];
+      const answerLog = allLogs[i + 1];
 
       if (queryLog && answerLog && queryLog.log_type === 'USER_QUERY' && answerLog.log_type === 'SYSTEM_RESPONSE') {
         recentLogs.push({
@@ -187,19 +199,18 @@ export async function runAssembler(pipelineId: string): Promise<void> {
       }
     }
 
-    // Limit to last 3 exchanges (format.md spec)
-    const limitedLogs = recentLogs.slice(-3);
+    logger.info(`[Assembler] Found ${recentLogs.length} recent exchanges from raw_logs`);
 
-    logger.info(`[Assembler] Found ${limitedLogs.length} recent exchanges from raw_logs`);
-
-    // Собрать контекст согласно /context/format.md
-    const context = buildContextString(
+    // Собрать контекст с учётом лимита токенов
+    const context = buildContextWithTokenLimit(
       run.user_query,
-      analysis.memories || [],
-      limitedLogs
+      prioritizedMemories,
+      recentLogs,
+      MAX_CONTEXT_TOKENS
     );
 
-    logger.info(`[Assembler] Context built: ${context.length} chars`);
+    const estimatedTokens = Math.ceil(context.length / CHARS_PER_TOKEN);
+    logger.info(`[Assembler] Context built: ${context.length} chars (~${estimatedTokens} tokens)`);
 
     // Сохранение результата
     await pool.query(
@@ -220,50 +231,134 @@ export async function runAssembler(pipelineId: string): Promise<void> {
 }
 
 /**
- * Build context string according to /context/format.md v0.1
- *
- * @param currentQuery - User's current question
- * @param memories - Retrieved memories from LSM (from Analyzer)
- * @param recentLogs - Recent conversation history
- * @returns Formatted context string
+ * Prioritize memories by relevance (tag overlap) and recency
  */
-function buildContextString(
+function prioritizeMemories(
+  memories: Array<{ summary_text: string; semantic_tags?: string[]; time_bucket?: string }>,
+  searchKeywords: string[]
+): Array<{ summary_text: string; semantic_tags?: string[]; time_bucket?: string; score: number }> {
+  if (!memories || memories.length === 0) return [];
+
+  return memories
+    .map(memory => {
+      let score = 0;
+
+      // Score by tag overlap
+      if (memory.semantic_tags && searchKeywords.length > 0) {
+        const tags = memory.semantic_tags.map(t => t.toLowerCase());
+        const keywords = searchKeywords.map(k => k.toLowerCase());
+        const overlap = tags.filter(t => keywords.some(k => t.includes(k) || k.includes(t))).length;
+        score += overlap * 10;
+      }
+
+      // Score by recency (recent weeks get bonus)
+      if (memory.time_bucket) {
+        const match = memory.time_bucket.match(/(\d{4})-W(\d{2})/);
+        if (match) {
+          const year = parseInt(match[1]);
+          const week = parseInt(match[2]);
+          const now = new Date();
+          const currentYear = now.getFullYear();
+          const currentWeek = getWeekNumber(now);
+
+          const weeksDiff = (currentYear - year) * 52 + (currentWeek - week);
+          if (weeksDiff <= 1) score += 5; // This week or last week
+          else if (weeksDiff <= 4) score += 3; // Last month
+          else if (weeksDiff <= 12) score += 1; // Last 3 months
+        }
+      }
+
+      return { ...memory, score };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+/**
+ * Get ISO week number
+ */
+function getWeekNumber(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
+/**
+ * Build context string with token limit
+ */
+function buildContextWithTokenLimit(
   currentQuery: string,
-  memories: Array<{ summary_text: string }>,
-  recentLogs: Array<{ query: string; answer: string }>
+  memories: Array<{ summary_text: string; score?: number }>,
+  recentLogs: Array<{ query: string; answer: string }>,
+  maxTokens: number
 ): string {
+  const maxChars = maxTokens * CHARS_PER_TOKEN;
   let context = '';
+  let remainingChars = maxChars;
 
-  // Section 1: SYSTEM ROLE (always included)
-  context += `SYSTEM ROLE:\n`;
-  context += `You are a helpful AI assistant with long-term memory of past conversations with this user.\n\n`;
+  // Section 1: SYSTEM ROLE (always included, ~200 chars)
+  const systemRole = `SYSTEM ROLE:\nYou are a helpful AI assistant with long-term memory of past conversations with this user.\n\n`;
+  context += systemRole;
+  remainingChars -= systemRole.length;
 
-  // Section 2: PREVIOUS CONTEXT (from long-term memory) - optional
+  // Section 4: CURRENT QUERY (always included, reserve space)
+  const querySection = `CURRENT QUERY:\n${currentQuery}\n\nPlease respond naturally, referencing past context when relevant.`;
+  remainingChars -= querySection.length + 50; // Buffer
+
+  // Section 2: PREVIOUS CONTEXT (from long-term memory) - prioritized
   if (memories && memories.length > 0) {
-    context += `PREVIOUS CONTEXT (from long-term memory):\n`;
-    memories.forEach(m => {
-      context += `${m.summary_text}\n\n`;
-    });
+    let memorySection = `PREVIOUS CONTEXT (from long-term memory):\n`;
+    let memoriesAdded = 0;
+
+    for (const m of memories) {
+      const memoryText = `• ${m.summary_text}\n`;
+      if (remainingChars - memoryText.length > 500) { // Keep buffer for conversations
+        memorySection += memoryText;
+        remainingChars -= memoryText.length;
+        memoriesAdded++;
+      } else {
+        break;
+      }
+    }
+
+    if (memoriesAdded > 0) {
+      context += memorySection + '\n';
+    }
   }
 
-  // Section 3: RECENT CONVERSATION - optional
+  // Section 3: RECENT CONVERSATION - limit to fit
   if (recentLogs && recentLogs.length > 0) {
-    context += `RECENT CONVERSATION:\n`;
-    recentLogs.forEach(log => {
-      context += `User: ${log.query}\n`;
-      context += `Assistant: ${log.answer}\n\n`;
-    });
+    let convSection = `RECENT CONVERSATION:\n`;
+    let conversationsAdded = 0;
+
+    // Add most recent conversations first (they're most relevant)
+    const recentFirst = [...recentLogs].reverse();
+    const toAdd: string[] = [];
+
+    for (const log of recentFirst) {
+      const convText = `User: ${log.query}\nAssistant: ${log.answer}\n\n`;
+      if (remainingChars - convText.length > 100) {
+        toAdd.unshift(convText); // Add to beginning to maintain chronological order
+        remainingChars -= convText.length;
+        conversationsAdded++;
+        if (conversationsAdded >= 3) break; // Max 3 recent conversations
+      } else {
+        break;
+      }
+    }
+
+    if (conversationsAdded > 0) {
+      context += convSection + toAdd.join('');
+    }
   }
 
-  // Section 4: CURRENT QUERY (always included)
-  context += `CURRENT QUERY:\n`;
-  context += `${currentQuery}\n\n`;
-
-  // Section 5: INSTRUCTION (always included)
-  context += `Please respond naturally, referencing past context when relevant.`;
+  // Add current query section
+  context += querySection;
 
   return context;
 }
+
 
 /**
  * Final Responder Agent Stub

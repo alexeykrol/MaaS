@@ -13,6 +13,53 @@ interface PipelineEvent {
 }
 
 /**
+ * Retry configuration
+ */
+const RETRY_CONFIG = {
+  maxRetries: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 10000,
+};
+
+/**
+ * Sleep utility
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Execute with retry logic
+ */
+async function withRetry<T>(
+  operation: () => Promise<T>,
+  operationName: string,
+  pipelineId: string
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      if (attempt < RETRY_CONFIG.maxRetries) {
+        const delay = Math.min(
+          RETRY_CONFIG.baseDelayMs * Math.pow(2, attempt - 1),
+          RETRY_CONFIG.maxDelayMs
+        );
+        logger.warn(`[Orchestrator] ${operationName} failed (attempt ${attempt}/${RETRY_CONFIG.maxRetries}), retrying in ${delay}ms...`);
+        await sleep(delay);
+      }
+    }
+  }
+
+  logger.error(`[Orchestrator] ${operationName} failed after ${RETRY_CONFIG.maxRetries} attempts for ${pipelineId}`);
+  throw lastError;
+}
+
+/**
  * Orchestrator - Event-Driven Coordinator
  *
  * Слушает PostgreSQL NOTIFY события и маршрутизирует задачи к агентам.
@@ -77,7 +124,7 @@ export class Orchestrator {
   }
 
   /**
-   * Маршрутизация событий к агентам
+   * Маршрутизация событий к агентам с retry логикой
    */
   private async handleEvent(event: PipelineEvent) {
     const { id, status } = event;
@@ -86,24 +133,29 @@ export class Orchestrator {
       switch (status) {
         case 'NEW':
           logger.info(`➡️  [Orchestrator] Routing to Analyzer: ${id}`);
-          await runAnalyzer(id);
+          await withRetry(() => runAnalyzer(id), 'Analyzer', id);
           break;
 
         case 'ANALYZED':
           logger.info(`➡️  [Orchestrator] Routing to Assembler: ${id}`);
-          await runAssembler(id);
+          await withRetry(() => runAssembler(id), 'Assembler', id);
           break;
 
         case 'READY':
           logger.info(`➡️  [Orchestrator] Routing to FinalResponder: ${id}`);
-          await runFinalResponder(id);
+          await withRetry(() => runFinalResponder(id), 'FinalResponder', id);
           break;
 
         case 'COMPLETED':
           logger.info(`✅ [Orchestrator] Request completed: ${id}`);
-          // Запускаем Archivist для создания долгосрочной памяти
+          // Запускаем Archivist для создания долгосрочной памяти (без retry - не критично)
           logger.info(`➡️  [Orchestrator] Routing to Archivist: ${id}`);
-          await runArchivist(id);
+          try {
+            await runArchivist(id);
+          } catch (archivistError) {
+            // Archivist failure is non-critical - log but don't fail the pipeline
+            logger.warn(`[Orchestrator] Archivist failed for ${id}, but pipeline completed:`, archivistError);
+          }
           break;
 
         case 'FAILED':
