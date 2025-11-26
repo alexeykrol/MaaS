@@ -2,12 +2,13 @@
 
 <div align="center">
 
+[![Version](https://img.shields.io/badge/Version-0.1.0-blue?style=for-the-badge&logo=semver&logoColor=white)](package.json)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
 [![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/)
 
-[![Status](https://img.shields.io/badge/Status-MVP%20v1.0-success?style=for-the-badge)](https://github.com/alexeykrol/MaaS)
+[![Status](https://img.shields.io/badge/Status-MVP-success?style=for-the-badge)](https://github.com/alexeykrol/MaaS)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![Event-Driven](https://img.shields.io/badge/Architecture-Event--Driven-orange?style=for-the-badge)](ARCHITECTURE.md)
 [![Tests](https://img.shields.io/badge/Tests-Passing-brightgreen?style=for-the-badge)](scripts/)
