@@ -27,11 +27,13 @@
 - Step 11: Polish (retry logic + error handling)
 
 ### 🔜 Следующий этап:
-- **Phase 4: Frontend Integration** (Post-MVP, шаги 12-18)
+- **Phase 2: Measurement Foundation** — Telemetry, Golden Dataset, LLM-Judge
+- После этого: **Phase 3: Self-Learning** — Tuner, Emulator, Teacher, Manager
 
 ### 📊 Детали:
+- См. **ROADMAP.md** для приоритетов
 - См. **PROJECT_SNAPSHOT.md** для полного статуса
-- См. **BACKLOG.md** для плана по шагам
+- См. **docs/selflearn/** для архитектуры самообучения
 
 ---
 
