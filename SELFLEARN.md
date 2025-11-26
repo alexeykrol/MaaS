@@ -118,7 +118,7 @@
 
 ## Импакт-факторы (что можем менять)
 
-> **Детальное описание:** см. [IMPACT_FACTORS.md](./IMPACT_FACTORS.md)
+> **Детальное описание:** см. [IMPACTS.md](./IMPACTS.md)
 >
 > Этот раздел содержит краткую сводку. Полный анализ с обоснованиями, механизмами влияния и рекомендациями — в отдельном документе.
 
@@ -992,7 +992,7 @@ Deep-cycle:
 
 ## Связанные файлы
 
-- [IMPACT_FACTORS.md](./IMPACT_FACTORS.md) — **детальный анализ импакт-факторов** (приоритет, механизмы влияния, рекомендации)
+- [IMPACTS.md](./IMPACTS.md) — **импакт-факторы системы** (артефакты, механизмы влияния, команды для агента)
 - [IDEAS.md](./IDEAS.md) — идеи для улучшения (input для экспериментов)
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — текущая архитектура
 - [Test/TEST_REGISTRY.md](./Test/TEST_REGISTRY.md) — существующие тесты
@@ -1021,7 +1021,7 @@ Deep-cycle:
    - Функции `activate_parameter_version()` и `rollback_parameters()`
 
 4. ✅ **Границы автономии?**
-   - **Решение:** см. секцию "Границы автономии" и [IMPACT_FACTORS.md](./IMPACT_FACTORS.md)
+   - **Решение:** см. секцию "Границы автономии" и [IMPACTS.md](./IMPACTS.md)
    - Auto-tunable: top_k (1-5), weights (0.3-0.7), temperature (0.5-0.9)
    - Manual only: model switch, RLS changes, Archivist prompts
 
