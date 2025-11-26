@@ -27,8 +27,8 @@
 - Step 11: Polish (retry logic + error handling)
 
 ### 🔜 Следующий этап:
-- **Phase 2: Measurement Foundation** — Telemetry, Golden Dataset, LLM-Judge
-- После этого: **Phase 3: Self-Learning** — Tuner, Emulator, Teacher, Manager
+- **Phase 2: Self-Learning System** — Telemetry → Tuner → User Emulator → Teacher → Manager
+- Measurement встроен: Teacher = LLM-Judge, User Emulator = Golden Dataset, Manager = Dashboard
 
 ### 📊 Детали:
 - См. **ROADMAP.md** для приоритетов

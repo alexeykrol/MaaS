@@ -122,25 +122,22 @@ All MVP steps completed:
 - ✅ Steps 6-8: Real Analyzer, Assembler, FinalResponder
 - ✅ Steps 9-11: Archivist, Assembler v2, Polish
 
-### Phase 2: Measurement Foundation 🔜 NEXT
+### Phase 2: Self-Learning System 🔜 NEXT
 
-> **Goal:** Understand how well MaaS performs with objective metrics.
+> **Goal:** MaaS evaluates itself and improves automatically through experiments.
 
-| Step | Name | What it does |
-|------|------|--------------|
-| 12 | Telemetry | `telemetry_events` table, latency/tokens/hit_rate collection |
-| 13 | Golden Dataset | 50+ test examples with expected_memory_ids |
-| 14 | LLM-Judge | Evaluate relevance, utilization, hallucinations |
-| 15 | Metrics Dashboard | Aggregations, visualization, `/api/metrics` |
+**Key insight:** Measurement is built into Self-Learning:
+- **Teacher** = LLM-Judge (quality evaluation)
+- **User Emulator** = Golden Dataset generator
+- **Manager** = Metrics Dashboard
 
-### Phase 3: Self-Learning System
-
-> **Goal:** MaaS improves automatically through experiments.
-
-- **Tuner**: Apply/rollback parameters safely
-- **User Emulator**: Generate synthetic dialogs
-- **Teacher**: Analyze metrics, form hypotheses, run experiments
-- **Manager**: Coordinate, generate reports
+| Step | Component | What it does |
+|------|-----------|--------------|
+| 12 | Telemetry | Collect metrics (latency, tokens, hit_rate) |
+| 13 | Tuner | Apply/rollback parameters safely |
+| 14 | User Emulator | Generate test dialogs (scenarios, personas) |
+| 15 | Teacher | Quality evaluation + hypotheses (LLM-Judge) |
+| 16 | Manager | Coordinate learning cycle, generate reports |
 
 **Details:** See [ROADMAP.md](./ROADMAP.md), [docs/selflearn/](./docs/selflearn/README.md)
 
