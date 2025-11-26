@@ -118,39 +118,41 @@
 
 ## Импакт-факторы (что можем менять)
 
-### Retrieval Parameters
+> **Детальное описание:** см. [IMPACT_FACTORS.md](./IMPACT_FACTORS.md)
+>
+> Этот раздел содержит краткую сводку. Полный анализ с обоснованиями, механизмами влияния и рекомендациями — в отдельном документе.
 
-| Параметр | Описание | Диапазон | Текущее |
-|----------|----------|----------|---------|
-| `top_k` | Количество memories для контекста | 1-10 | 3 |
-| `keyword_count` | Сколько keywords извлекать | 3-10 | 5 |
-| `relevance_weight` | Вес релевантности vs recency | 0.0-1.0 | 0.5 |
-| `recency_weight` | Вес свежести | 0.0-1.0 | 0.5 |
-| `min_tag_overlap` | Минимум совпадающих тегов | 1-3 | 1 |
+### Сводка по значимости (убывание)
 
-### Context Assembly
+| # | Фактор | Влияние | Категория |
+|---|--------|---------|-----------|
+| 1 | **Retrieval Strategy** | ⬛⬛⬛⬛⬛ | Архитектурный |
+| 2 | **Keyword Extraction** | ⬛⬛⬛⬛⬛ | Retrieval |
+| 3 | **Archivist Tag Quality** | ⬛⬛⬛⬛ | Memory Creation |
+| 4 | **top_k** | ⬛⬛⬛⬛ | Retrieval |
+| 5 | **System Prompt** | ⬛⬛⬛ | LLM Behavior |
+| 6 | **LLM Model** | ⬛⬛⬛ | LLM |
+| 7 | **Relevance/Recency Weights** | ⬛⬛ | Ranking |
+| 8 | **Max Context Tokens** | ⬛⬛ | Context |
+| 9 | **Temperature** | ⬛ | LLM |
 
-| Параметр | Описание | Диапазон | Текущее |
-|----------|----------|----------|---------|
-| `max_context_tokens` | Лимит токенов контекста | 1000-8000 | 4000 |
-| `memory_order` | Порядок memories | chronological/relevance | relevance |
-| `include_metadata` | Показывать теги/даты | true/false | true |
+### Ключевые параметры для экспериментов
 
-### LLM Settings
+| Параметр | Безопасный диапазон | Текущее | Auto-tunable |
+|----------|---------------------|---------|--------------|
+| `top_k` | 1-5 | 3 | ✅ |
+| `keyword_count` | 3-7 | 5 | ✅ |
+| `relevance_weight` | 0.3-0.7 | 0.5 | ✅ |
+| `recency_weight` | 0.3-0.7 | 0.5 | ✅ |
+| `temperature` | 0.5-0.9 | 0.7 | ✅ |
+| `max_context_tokens` | 1000-8000 | 4000 | ⚠️ |
+| `model` | mini/4o | mini | ❌ Manual |
+| `system_prompt` | versions | v1 | ❌ A/B only |
 
-| Параметр | Описание | Диапазон | Текущее |
-|----------|----------|----------|---------|
-| `model` | Модель для ответа | mini/4o | mini |
-| `temperature` | Креативность | 0.0-1.0 | 0.7 |
-| `system_prompt` | Инструкции для LLM | text | default |
-
-### Archivist Settings
-
-| Параметр | Описание | Диапазон | Текущее |
-|----------|----------|----------|---------|
-| `max_tags` | Максимум тегов на memory | 3-10 | 5 |
-| `summary_length` | Длина summary | short/medium/long | medium |
-| `archival_threshold` | Минимальная значимость | 0.0-1.0 | 0.0 |
+**Легенда:**
+- ✅ Auto-tunable — система может менять автоматически
+- ⚠️ Осторожно — требует мониторинга
+- ❌ Manual — только с подтверждением
 
 ---
 
@@ -990,6 +992,7 @@ Deep-cycle:
 
 ## Связанные файлы
 
+- [IMPACT_FACTORS.md](./IMPACT_FACTORS.md) — **детальный анализ импакт-факторов** (приоритет, механизмы влияния, рекомендации)
 - [IDEAS.md](./IDEAS.md) — идеи для улучшения (input для экспериментов)
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — текущая архитектура
 - [Test/TEST_REGISTRY.md](./Test/TEST_REGISTRY.md) — существующие тесты
@@ -997,6 +1000,8 @@ Deep-cycle:
 ---
 
 ## Вопросы для обсуждения
+
+### Открытые вопросы
 
 1. **Как определять idle?**
    - По времени последнего запроса?
@@ -1008,13 +1013,17 @@ Deep-cycle:
    - LLM-agent?
    - Human-in-the-loop для критичных изменений?
 
-3. **Как откатывать?**
-   - Версионирование параметров?
-   - Снапшоты конфигурации?
+### Решённые вопросы
 
-4. **Границы автономии?**
-   - Что система может менять сама?
-   - Что требует подтверждения?
+3. ✅ **Как откатывать?**
+   - **Решение:** Parameter Versioning (см. секцию выше)
+   - Таблица `experiment_parameters` с версионированием
+   - Функции `activate_parameter_version()` и `rollback_parameters()`
+
+4. ✅ **Границы автономии?**
+   - **Решение:** см. секцию "Границы автономии" и [IMPACT_FACTORS.md](./IMPACT_FACTORS.md)
+   - Auto-tunable: top_k (1-5), weights (0.3-0.7), temperature (0.5-0.9)
+   - Manual only: model switch, RLS changes, Archivist prompts
 
 ---
 
