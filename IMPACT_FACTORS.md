@@ -88,6 +88,40 @@ Vector (будущее):
 2. **Среднесрочно:** pgvector + embeddings (ada-002)
 3. **Долгосрочно:** Hybrid retrieval + LLM reranker
 
+### Reranker (LLM-Judge) — ключевой компонент
+
+> *Добавлено от Codex: 2025-11-26*
+
+**Reranker** — LLM-based фильтр, который отсеивает шум после первичного retrieval.
+
+```
+Pipeline с Reranker:
+  1. Retrieval (fast): получить top-20 candidates
+  2. Reranker (LLM): "Which of these are relevant to: {query}?"
+  3. Final: top-5 отфильтрованных → в контекст
+```
+
+**Почему критичен при Hybrid Search:**
+
+| Этап | Precision | Recall | Latency |
+|------|-----------|--------|---------|
+| Vector только | 65% | 70% | Fast |
+| Vector + Reranker | 85% | 70% | +500ms |
+| Hybrid + Reranker | 90% | 80% | +700ms |
+
+**Reranker Prompt:**
+```
+Given the query: "{query}"
+
+Rank these memories by relevance (1 = most relevant):
+{memories}
+
+Return JSON: [{"id": "...", "rank": 1, "relevant": true}, ...]
+Only include memories with relevant=true in final context.
+```
+
+**Trade-off:** Добавляет latency (~500ms) и cost (~$0.001/request), но существенно повышает precision.
+
 ---
 
 ## ИФ #2: Keyword Extraction Quality
@@ -164,6 +198,62 @@ const keywords = query.toLowerCase()
 1. **Краткосрочно:** Стоп-слова + лемматизация
 2. **Среднесрочно:** LLM extraction (попросить GPT извлечь keywords)
 3. **Долгосрочно:** Query expansion (synonyms, related concepts)
+
+### Промежуточные шаги до LLM-extraction
+
+> *Добавлено от Codex: 2025-11-26*
+
+**Этап 1: Стоп-слова + Лемматизация (zero LLM cost)**
+
+```typescript
+// Стоп-слова
+const STOP_WORDS = new Set([
+  'what', 'how', 'why', 'when', 'where', 'who',
+  'is', 'are', 'was', 'were', 'be', 'been',
+  'the', 'a', 'an', 'this', 'that',
+  'should', 'could', 'would', 'can', 'will',
+  'i', 'my', 'me', 'you', 'your'
+]);
+
+// Простая лемматизация (rules-based)
+const LEMMA_RULES: Record<string, string> = {
+  'programming': 'program',
+  'languages': 'language',
+  'learning': 'learn',
+  'coding': 'code',
+  // ... extend as needed
+};
+
+function extractKeywords(query: string): string[] {
+  return query.toLowerCase()
+    .split(/\s+/)
+    .filter(word => word.length > 2 && !STOP_WORDS.has(word))
+    .map(word => LEMMA_RULES[word] || word);
+}
+```
+
+**Этап 2: Query Expansion (synonym mapping)**
+
+```typescript
+const SYNONYMS: Record<string, string[]> = {
+  'programming': ['coding', 'development', 'software'],
+  'language': ['lang', 'technology', 'framework'],
+  'favorite': ['preferred', 'best', 'like'],
+  'learn': ['study', 'education', 'training'],
+};
+
+function expandKeywords(keywords: string[]): string[] {
+  const expanded = new Set(keywords);
+  for (const kw of keywords) {
+    if (SYNONYMS[kw]) {
+      SYNONYMS[kw].forEach(syn => expanded.add(syn));
+    }
+  }
+  return Array.from(expanded);
+}
+```
+
+**Этап 3: LLM-based extraction (highest quality)**
 
 **LLM-based extraction prompt:**
 ```
@@ -268,6 +358,67 @@ Summary: "{summary}"
 
 Return 5-7 tags as JSON array.
 ```
+
+### Контролируемый словарь и нормализация тегов
+
+> *Добавлено от Codex: 2025-11-26*
+
+**Проблема:** Свободное генерирование тегов приводит к разбросу:
+- "python", "Python", "python-language", "python-programming" → один и тот же концепт
+
+**Решение: Tag Taxonomy + Normalization**
+
+```typescript
+// Контролируемый словарь категорий
+const TAG_TAXONOMY = {
+  // Technologies
+  languages: ['python', 'javascript', 'typescript', 'go', 'rust', 'java'],
+  frameworks: ['react', 'vue', 'express', 'django', 'fastapi'],
+  tools: ['git', 'docker', 'kubernetes', 'vscode'],
+
+  // User attributes
+  preferences: ['favorite', 'preferred', 'dislike', 'avoid'],
+  sentiments: ['positive', 'negative', 'neutral', 'excited'],
+
+  // Action types
+  actions: ['question', 'decision', 'learning', 'recommendation', 'problem'],
+
+  // Domains
+  domains: ['career', 'education', 'project', 'hobby', 'work'],
+};
+
+// Нормализация (synonyms → canonical)
+const TAG_NORMALIZATION: Record<string, string> = {
+  'python-language': 'python',
+  'python-programming': 'python',
+  'js': 'javascript',
+  'typescript': 'typescript',  // keep as-is
+  'fav': 'favorite',
+  'fave': 'favorite',
+  'favourite': 'favorite',
+  'likes': 'favorite',
+  'prefers': 'preferred',
+};
+
+function normalizeTags(rawTags: string[]): string[] {
+  return rawTags
+    .map(tag => tag.toLowerCase().trim())
+    .map(tag => TAG_NORMALIZATION[tag] || tag)
+    .filter(tag => isValidTag(tag));  // Validate against taxonomy
+}
+```
+
+**Two-pass Tagging Pipeline:**
+```
+Pass 1: LLM extracts raw tags → ["Python programming", "user likes", "career question"]
+Pass 2: Normalize → ["python", "favorite", "career", "question"]
+Pass 3: Validate against taxonomy → keep valid, flag unknown for review
+```
+
+**Преимущества:**
+- Снижение разброса (меньше вариаций одного концепта)
+- Лучший tag overlap при retrieval
+- Возможность анализа tag distribution
 
 ---
 
@@ -401,6 +552,67 @@ Rules:
 2. **A/B тест:** Сравнить hallucination rate
 3. **Версионирование:** Хранить prompt versions в system_prompts table
 
+### Два варианта для A/B тестирования
+
+> *Добавлено от Codex: 2025-11-26*
+
+**Вариант A: STRICT (no-invent)**
+```
+You are an AI assistant. You have access to context from previous conversations with this user.
+
+CRITICAL RULES:
+1. Use ONLY the context provided below. Do not invent or assume any facts.
+2. If the context does not contain relevant information, say:
+   "I don't have information about that in our conversation history."
+3. NEVER make up details about the user (preferences, history, personal info).
+4. Clearly separate: facts from context vs general knowledge.
+
+Context:
+{context}
+
+User Query: {query}
+```
+
+**Вариант B: RICH STYLE (personalized)**
+```
+You are a helpful AI assistant who remembers previous conversations with the user.
+You have a warm, friendly tone and try to make connections to past discussions.
+
+When using context:
+- Reference specific details naturally: "As you mentioned before..."
+- Build on previous conversations
+- If no relevant history exists, respond helpfully without pretending to remember
+
+Context from previous conversations:
+{context}
+
+User: {query}
+```
+
+**A/B Test Metrics:**
+
+| Метрика | Strict | Rich | Winner |
+|---------|--------|------|--------|
+| Hallucination Rate | Lower expected | Higher expected | Strict |
+| User Satisfaction | Lower expected | Higher expected | Rich |
+| Context Utilization | Similar | Similar | Tie |
+
+**Гипотеза:** Strict лучше для accuracy, Rich лучше для engagement. Оптимум — Strict с элементами Rich при наличии контекста.
+
+### Версионирование в system_prompts
+
+```sql
+-- Хранение версий промптов
+INSERT INTO system_prompts (role, prompt_text, version, is_active)
+VALUES
+  ('responder', 'Strict prompt text...', 1, false),
+  ('responder', 'Rich prompt text...', 2, true);
+
+-- Получение активного промпта
+SELECT prompt_text FROM system_prompts
+WHERE role = 'responder' AND is_active = true;
+```
+
 ---
 
 ## ИФ #6: LLM Model
@@ -445,6 +657,81 @@ gpt-4o: Медленнее, дороже, но лучше reasoning и instructi
 1. **Adaptive model selection:** Simple queries → mini, Complex → 4o
 2. **Cost budget:** Track spending, switch to mini if over budget
 3. **Quality threshold:** If mini fails quality check, retry with 4o
+
+### Адаптивный выбор модели по сложности запроса
+
+> *Добавлено от Codex: 2025-11-26*
+
+**Идея:** Классифицировать запрос по сложности и выбирать модель соответственно.
+
+```typescript
+type QueryComplexity = 'simple' | 'medium' | 'complex';
+
+interface ModelConfig {
+  model: string;
+  maxTokens: number;
+  temperature: number;
+}
+
+const MODEL_BY_COMPLEXITY: Record<QueryComplexity, ModelConfig> = {
+  simple: {
+    model: 'gpt-4o-mini',
+    maxTokens: 500,
+    temperature: 0.5,
+  },
+  medium: {
+    model: 'gpt-4o-mini',
+    maxTokens: 1000,
+    temperature: 0.7,
+  },
+  complex: {
+    model: 'gpt-4o',
+    maxTokens: 2000,
+    temperature: 0.7,
+  },
+};
+
+// Классификатор сложности (cheap, fast)
+async function classifyComplexity(query: string, contextSize: number): Promise<QueryComplexity> {
+  // Эвристики без LLM call:
+  const wordCount = query.split(/\s+/).length;
+  const hasMultipleQuestions = (query.match(/\?/g) || []).length > 1;
+  const hasReasoningKeywords = /why|how|explain|compare|analyze/i.test(query);
+
+  if (wordCount < 10 && !hasReasoningKeywords && contextSize < 3) {
+    return 'simple';
+  }
+  if (hasMultipleQuestions || hasReasoningKeywords || contextSize > 5) {
+    return 'complex';
+  }
+  return 'medium';
+}
+
+// Или через LLM (more accurate, but adds latency + cost)
+async function classifyComplexityLLM(query: string): Promise<QueryComplexity> {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    max_tokens: 10,
+    messages: [{
+      role: 'user',
+      content: `Classify this query complexity: "${query}"
+      Reply with one word: simple, medium, or complex`
+    }]
+  });
+  return response.choices[0].message.content as QueryComplexity;
+}
+```
+
+**Cost/Quality Trade-off:**
+
+| Стратегия | Avg Cost | Quality | Latency |
+|-----------|----------|---------|---------|
+| Always mini | $0.0002 | Good | Fast |
+| Always 4o | $0.003 | Excellent | Slow |
+| Adaptive (heuristic) | $0.0008 | Very Good | Fast |
+| Adaptive (LLM classify) | $0.001 | Very Good | +100ms |
+
+**Рекомендация:** Начать с heuristic-based classification, измерить quality delta, потом решить нужен ли LLM classifier.
 
 ---
 
@@ -517,6 +804,73 @@ gpt-4o: Медленнее, дороже, но лучше reasoning и instructi
 | 4000 (текущее) | 5-8 medium | Баланс |
 | 8000 | 10-15 medium | Максимальный контекст |
 | 16000 | 20+ | Для complex multi-topic queries |
+
+### Политика усечения и Token Budget
+
+> *Добавлено от Codex: 2025-11-26*
+
+**Проблема:** Когда контекст превышает лимит, что отрезать?
+
+**Две стратегии усечения:**
+
+| Стратегия | Описание | Плюсы | Минусы |
+|-----------|----------|-------|--------|
+| **DROP** | Отбросить наименее релевантные memories целиком | Простая, быстрая | Теряем информацию |
+| **SUMMARY** | Сжать memories через LLM summarization | Сохраняем суть | +latency, +cost |
+
+**Token Budget Distribution:**
+
+```typescript
+interface TokenBudget {
+  total: number;           // 4000 (общий лимит)
+  systemPrompt: number;    // ~200 (фиксированный)
+  recentLogs: number;      // ~800 (последние сообщения)
+  memories: number;        // ~2500 (LSM memories)
+  userQuery: number;       // ~200 (текущий запрос)
+  buffer: number;          // ~300 (запас)
+}
+
+const DEFAULT_BUDGET: TokenBudget = {
+  total: 4000,
+  systemPrompt: 200,
+  recentLogs: 800,
+  memories: 2500,
+  userQuery: 200,
+  buffer: 300,
+};
+
+function allocateTokens(
+  recentLogsSize: number,
+  memoriesSize: number,
+  budget: TokenBudget = DEFAULT_BUDGET
+): { recentLogs: number; memories: number } {
+  const available = budget.total - budget.systemPrompt - budget.userQuery - budget.buffer;
+
+  // Приоритет: recent logs важнее для continuity
+  const recentLogsAlloc = Math.min(recentLogsSize, budget.recentLogs);
+  const memoriesAlloc = Math.min(memoriesSize, available - recentLogsAlloc);
+
+  return { recentLogs: recentLogsAlloc, memories: memoriesAlloc };
+}
+```
+
+**Truncation Pipeline:**
+
+```
+1. Calculate token budget per category
+2. If memories exceed budget:
+   a. Sort by relevance score (descending)
+   b. Option A (DROP): Take top-N that fit
+   c. Option B (SUMMARY): Summarize bottom memories into single block
+3. If recent_logs exceed budget:
+   a. Keep most recent N messages
+   b. Summarize older messages: "Earlier, you discussed: {summary}"
+```
+
+**Рекомендация:**
+- Начать с DROP (простая реализация)
+- Добавить SUMMARY как fallback для complex queries
+- Измерять "context completeness" метрику
 
 ---
 
