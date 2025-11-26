@@ -2,7 +2,37 @@
 
 *Создано: 2025-11-26*
 
-> **Философия:** Основная цель системы — постоянное самообучение.
+---
+
+## 0. Роль документа
+
+> **SELFLEARN.md** = как система автоматически крутит параметры (IMPACTS.md) на основе метрик (METRICS.md).
+
+**Связь с другими документами:**
+
+| Документ | Отвечает на вопрос |
+|----------|-------------------|
+| [IMPACTS.md](./IMPACTS.md) | **Что** можем менять (артефакты, параметры) |
+| [METRICS.md](./METRICS.md) | **Как** измеряем качество (формулы, targets) |
+| **SELFLEARN.md** | **Когда и кто** меняет параметры (циклы, автономия, откаты) |
+
+**Артефакты, описанные в этом документе:**
+
+| Артефакт | Тип | Статус |
+|----------|-----|--------|
+| `experiment_parameters` | Таблица БД | Существует |
+| `telemetry_events` | Таблица БД | Существует |
+| `test_dialogs` | Таблица БД (Golden dataset) | Существует |
+| `[NEW] src/selflearn/scheduler.ts` | Модуль | Планируется |
+| `[NEW] src/selflearn/evaluator.ts` | Модуль | Планируется |
+| `[NEW] src/selflearn/optimizer.ts` | Модуль | Планируется |
+| `[NEW] prompts/llm_judge.md` | Файл промптов | Планируется |
+
+---
+
+## Философия
+
+> Основная цель системы — постоянное самообучение.
 > Реальные диалоги с пользователем — лишь разновидность учебных кейсов.
 
 ---
@@ -138,21 +168,12 @@
 
 ### Ключевые параметры для экспериментов
 
-| Параметр | Безопасный диапазон | Текущее | Auto-tunable |
-|----------|---------------------|---------|--------------|
-| `top_k` | 1-5 | 3 | ✅ |
-| `keyword_count` | 3-7 | 5 | ✅ |
-| `relevance_weight` | 0.3-0.7 | 0.5 | ✅ |
-| `recency_weight` | 0.3-0.7 | 0.5 | ✅ |
-| `temperature` | 0.5-0.9 | 0.7 | ✅ |
-| `max_context_tokens` | 1000-8000 | 4000 | ⚠️ |
-| `model` | mini/4o | mini | ❌ Manual |
-| `system_prompt` | versions | v1 | ❌ A/B only |
+> **Source of truth:** см. секцию [Границы автономии](#границы-автономии-от-codex) ниже.
 
-**Легенда:**
-- ✅ Auto-tunable — система может менять автоматически
-- ⚠️ Осторожно — требует мониторинга
-- ❌ Manual — только с подтверждением
+**Краткая сводка:**
+- ✅ **Auto-tunable:** `top_k` (1-5), `keyword_count` (3-7), `relevance_weight` (0.3-0.7), `recency_weight` (0.3-0.7), `temperature` (0.5-0.9)
+- ⚠️ **Осторожно:** `max_context_tokens` (1000-8000)
+- ❌ **Manual:** `model`, `system_prompt`, RLS, Archivist prompts
 
 ---
 
@@ -173,6 +194,18 @@
 ---
 
 ## Golden Dataset
+
+**Артефакт данных:**
+- Таблица: `test_dialogs`
+- Поля: `id`, `user_query`, `expected_memory_ids UUID[]`, `category`, `difficulty`
+
+**Артефакт логики:**
+- Модуль: `[NEW] src/test-runner/evaluator.ts`
+- Функция: `evaluateOnGoldenDataset()` — прогоняет все тесты, считает recall
+
+**Команды для агента:**
+1. «Добавь поля `expected_memory_ids UUID[]`, `category VARCHAR(20)`, `difficulty VARCHAR(10)` в таблицу `test_dialogs`.»
+2. «Наполни `test_dialogs` тестовыми примерами по категориям ниже (минимум 50 примеров).»
 
 ### Структура тестового примера
 
@@ -321,17 +354,17 @@ Duration: 1 macro-cycle
 
 ### Компоненты
 
-1. **Scheduler**
+1. **Scheduler** → `[NEW] src/selflearn/scheduler.ts`
    - Определяет, когда система idle
    - Запускает нужный цикл (micro/macro/deep)
    - Приоритизирует эксперименты
 
-2. **Evaluator**
+2. **Evaluator** → `[NEW] src/selflearn/evaluator.ts`
    - Прогоняет golden dataset
    - Вычисляет метрики
    - Использует LLM-judge для качественных оценок
 
-3. **Optimizer**
+3. **Optimizer** → `[NEW] src/selflearn/optimizer.ts`
    - Анализирует результаты экспериментов
    - Принимает решения об изменении параметров
    - Откатывает неудачные изменения
@@ -480,7 +513,24 @@ GROUP BY variant;
 
 ---
 
-## LLM-Judge Prompts (от Codex)
+## LLM-Judge Prompts
+
+**Артефакт:**
+- Файл: `[NEW] prompts/llm_judge.md` — вынести промпты ниже в отдельный файл
+- Модуль: `[NEW] src/utils/llmJudge.ts` — функции, использующие эти промпты
+
+**Функции в модуле:**
+| Функция | Промпт | Результат |
+|---------|--------|-----------|
+| `judgeRetrievalRelevance(query, memories)` | Retrieval Relevance Judge | `{relevant: boolean, precision: number}` |
+| `judgeContextUtilization(context, query, response)` | Context Utilization Judge | `{utilized: boolean, evidence: string}` |
+| `detectHallucination(context, response)` | Hallucination Detection Judge | `{detected: boolean, claims: string[]}` |
+
+**Команды для агента:**
+1. «Создай файл `prompts/llm_judge.md` с тремя промптами ниже.»
+2. «Создай `src/utils/llmJudge.ts` с функциями из таблицы выше, которые читают промпты и вызывают OpenAI.»
+
+---
 
 ### 1. Retrieval Relevance Judge
 
