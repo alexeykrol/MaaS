@@ -11,7 +11,7 @@
  */
 
 import * as readline from 'readline';
-import { TestRunnerEngine } from './engine';
+import { TestRunnerEngine, TestMode } from './engine';
 import { closePool } from '../utils/db';
 
 const rl = readline.createInterface({
@@ -91,7 +91,7 @@ async function interactiveMode(runner: TestRunnerEngine): Promise<void> {
     console.log('─'.repeat(40));
     console.log('1. List scenarios');
     console.log('2. Run scenario');
-    console.log('3. Toggle mode (current: ' + (runner['mockMode'] ? 'MOCK' : 'REAL') + ')');
+    console.log('3. Toggle mode (current: ' + runner.getMode().toUpperCase() + ')');
     console.log('4. Exit');
     console.log('─'.repeat(40));
 
@@ -112,9 +112,10 @@ async function interactiveMode(runner: TestRunnerEngine): Promise<void> {
         break;
 
       case '3':
-        const currentMode = runner['mockMode'];
-        runner.setMockMode(!currentMode);
-        console.log(`\n✅ Mode changed to: ${!currentMode ? 'MOCK' : 'REAL'}`);
+        const currentMode = runner.getMode();
+        const newMode = currentMode === TestMode.MOCK ? TestMode.FULL : TestMode.MOCK;
+        runner.setMode(newMode);
+        console.log(`\n✅ Mode changed to: ${newMode.toUpperCase()}`);
         break;
 
       case '4':
@@ -133,11 +134,11 @@ async function main() {
   const args = process.argv.slice(2);
 
   // Create Test Runner in mock mode by default
-  const runner = new TestRunnerEngine({ mockMode: true });
+  const runner = new TestRunnerEngine({ mode: TestMode.MOCK });
 
   console.log('\n🚀 MaaS MVP Test Runner');
   console.log('Version: 1.0.0');
-  console.log('Mode: ' + (runner['mockMode'] ? 'MOCK' : 'REAL'));
+  console.log('Mode: ' + runner.getMode().toUpperCase());
 
   try {
     if (args.length > 0) {

@@ -9,16 +9,22 @@
 > **⚠️ ОБНОВЛЯЙ ЭТУ СЕКЦИЮ после каждой фазы!** (см. PROCESS.md)
 
 **Проект:** MaaS MVP (Memory as a Service)
-**Прогресс:** 25% (3/12 шагов)
-**Текущий шаг:** Step 3 - Orchestrator
+**Прогресс:** 75% (9/12 шагов)
+**Текущий шаг:** Step 9 - Archivist
 
 ### ✅ Завершено:
 - Step 0: Подготовка (структура, зависимости, Supabase connection)
 - Step 1: База данных (6 таблиц, триггеры, seeds)
 - Step 2: Test Runner (engine + API + UI, mock mode)
+- Step 3: Orchestrator (LISTEN/NOTIFY, маршрутизация к агентам)
+- Step 4: Agent Stubs (идемпотентность, переходы статусов)
+- Step 5: Logger (уровни, timestamps, JSON)
+- Step 6: Real Analyzer (keyword search в LSM)
+- Step 7: Real Assembler (context building из LSM + raw_logs)
+- Step 8: Real FinalResponder (OpenAI gpt-4o-mini)
 
 ### 🔜 Следующий шаг:
-- Step 3: Orchestrator (LISTEN/NOTIFY, маршрутизация к агентам)
+- Step 9: Archivist (суммаризация диалогов → запись в LSM)
 
 ### 📊 Детали:
 - См. **PROJECT_SNAPSHOT.md** для полного статуса
@@ -150,9 +156,14 @@ src/
 ├── agents/           # Агенты (Analyzer, Assembler, etc.)
 ├── orchestrator/     # Orchestrator (LISTEN/NOTIFY)
 ├── test-runner/      # Test Runner (engine, api, cli)
-├── utils/            # Утилиты (db.ts, logger.ts)
+├── utils/            # Утилиты (db.ts, logger.ts, openai.ts)
 ├── server.ts         # HTTP сервер
 └── main.ts           # Entry point для Orchestrator
+
+Test/
+├── TEST_REGISTRY.md  # Реестр всех тестов (что тестируем)
+├── TEST_LOG.md       # История выполнения тестов
+└── scenarios/        # Детальные сценарии по модулям
 ```
 
 ---
@@ -272,4 +283,4 @@ npm run dev              # Запустить сервер
 ---
 
 *Последнее обновление: 2025-11-25*
-*Текущий шаг: Step 3 - Orchestrator*
+*Текущий шаг: Step 9 - Archivist*
