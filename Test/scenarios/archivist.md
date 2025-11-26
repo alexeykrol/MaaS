@@ -1,10 +1,10 @@
 # Test Scenario: Archivist (Step 9)
 
-**Модуль:** `src/agents/index.ts` → `runArchivist()` (TBD)
+**Модуль:** `src/agents/index.ts` → `runArchivist()`
 **Шаг:** 9
 **Тесты:** T9.1, T9.2, T9.3, T9.4
 
-> **Статус:** ⏳ НЕ РЕАЛИЗОВАН
+> **Статус:** ✅ РЕАЛИЗОВАН И ПРОТЕСТИРОВАН
 
 ---
 
@@ -13,23 +13,25 @@
 Archivist — агент, который создаёт долгосрочную память (LSM) из завершённых диалогов.
 
 ### Задача:
-1. Читать raw_logs после COMPLETED
-2. Суммаризировать диалог через LLM
-3. Извлечь semantic_tags
-4. Записать в lsm_storage
+1. Вызывается после COMPLETED через Orchestrator
+2. Читает raw_logs для pipeline_run
+3. Суммаризирует диалог через LLM
+4. Извлекает semantic_tags через LLM
+5. Записывает summary в lsm_storage
+6. Помечает raw_logs как processed
 
 ---
 
-## T9.1 — Чтение raw_logs для архивации (⏳)
+## T9.1 — Чтение raw_logs для архивации ✅
 
-### Логика:
+### Код:
 ```typescript
-// Получить логи для конкретного pipeline_run
-const logs = await pool.query(
-  `SELECT log_type, log_data
+const logsResult = await pool.query(
+  `SELECT id, log_type, log_data
    FROM raw_logs
    WHERE pipeline_run_id = $1
-   ORDER BY created_at`,
+     AND processed = false
+   ORDER BY created_at ASC`,
   [pipelineId]
 );
 ```
@@ -42,102 +44,150 @@ const logs = await pool.query(
 ]
 ```
 
+### Лог:
+```
+[INFO] [Archivist] Found 2 unprocessed logs
+[INFO] [Archivist] Dialog text: 745 chars
+```
+
 ---
 
-## T9.2 — Суммаризация через LLM (⏳)
+## T9.2 — Суммаризация через LLM ✅
 
 ### Промпт:
 ```
-Summarize this conversation in 1-2 sentences, focusing on key facts and user preferences:
+You are an archivist. Analyze this conversation and create a memory record.
 
-User: {query}
-Assistant: {answer}
+CONVERSATION:
+User: [query]
+Assistant: [answer]
 
-Summary:
+Respond in JSON format with exactly these fields:
+{
+  "summary": "A 1-2 sentence summary...",
+  "tags": ["tag1", "tag2", "tag3"]
+}
 ```
 
-### Код (план):
+### Код:
 ```typescript
-const summary = await createChatCompletion({
+const llmResponse = await createChatCompletion({
   model: 'gpt-4o-mini',
-  messages: [
-    { role: 'system', content: 'You are a summarizer...' },
-    { role: 'user', content: dialogText }
-  ],
-  max_tokens: 200
+  messages: [{ role: 'user', content: archivistPrompt }],
+  temperature: 0.3,
+  max_tokens: 500
 });
 ```
 
+### Реальный результат:
+```
+[INFO] [Archivist] 🤖 Calling LLM for summarization...
+[INFO] [OpenAI] Completed in 3522ms
+[INFO] [Archivist] LLM responded: 378 chars
+```
+
 ---
 
-## T9.3 — Извлечение semantic_tags (⏳)
+## T9.3 — Извлечение semantic_tags ✅
 
-### Промпт:
-```
-Extract 3-5 keywords/tags from this conversation:
-
-{dialog}
-
-Tags (comma-separated):
-```
-
-### Ожидаемый результат:
+### Ожидаемый формат:
 ```json
-["programming", "typescript", "preference", "blue"]
+["tag1", "tag2", "tag3", "tag4", "tag5"]
+```
+
+### Реальный результат:
+```
+[INFO] [Archivist] Tags: [meaning of life, philosophy, personal growth, existentialism, connections]
+```
+
+### Fallback при ошибке парсинга:
+```typescript
+archiveData = {
+  summary: `Dialog about: ${pipeline.user_query.substring(0, 100)}`,
+  tags: extractSimpleKeywords(pipeline.user_query)
+};
 ```
 
 ---
 
-## T9.4 — Запись в lsm_storage (⏳)
+## T9.4 — Запись в lsm_storage ✅
 
 ### SQL:
 ```sql
-INSERT INTO lsm_storage (
-  user_id,
-  summary_text,
-  semantic_tags,
-  time_bucket,
-  source_run_ids
-) VALUES ($1, $2, $3, $4, $5)
+INSERT INTO lsm_storage (user_id, time_bucket, semantic_tags, summary_text, source_run_ids)
+VALUES ($1, $2, $3, $4, $5)
 ```
 
 ### Поля:
+- `user_id` — UUID пользователя
+- `time_bucket` — ISO week (например '2025-W48')
+- `semantic_tags` — массив тегов от LLM
 - `summary_text` — суммаризация от LLM
-- `semantic_tags` — массив keywords
-- `time_bucket` — неделя (например '2025-W47')
-- `source_run_ids` — массив pipeline_run IDs
+- `source_run_ids` — массив UUID pipeline_runs
+
+### Реальный результат:
+```
+[INFO] [Archivist] Time bucket: 2025-W48
+[INFO] [Archivist] ✅ Created LSM record
+```
+
+### Проверка в БД:
+```sql
+SELECT semantic_tags, summary_text
+FROM lsm_storage
+ORDER BY created_at DESC
+LIMIT 1;
+```
+
+---
+
+## T9.5 — Пометка raw_logs как processed ✅
+
+### SQL:
+```sql
+UPDATE raw_logs
+SET processed = true, processed_at = NOW()
+WHERE id = ANY($1)
+```
+
+### Реальный результат:
+```
+[INFO] [Archivist] ✅ Marked 2 logs as processed
+```
+
+---
+
+## E2E тест
+
+```bash
+# 1. Запустить Orchestrator (с Archivist routing)
+npm run orchestrator
+
+# 2. Создать pipeline_run
+npx ts-node src/test-pipeline.ts
+
+# 3. Наблюдать логи:
+# - Pipeline: NEW → COMPLETED
+# - Archivist: reads logs → summarizes → saves to LSM
+
+# 4. Проверить результат в БД
+SELECT * FROM lsm_storage ORDER BY created_at DESC LIMIT 1;
+SELECT processed, COUNT(*) FROM raw_logs GROUP BY processed;
+```
 
 ---
 
 ## Триггер запуска
 
-### Вариант 1: После COMPLETED
+Archivist вызывается автоматически в Orchestrator:
+
 ```typescript
 case 'COMPLETED':
+  logger.info(`✅ [Orchestrator] Request completed: ${id}`);
+  logger.info(`➡️  [Orchestrator] Routing to Archivist: ${id}`);
   await runArchivist(id);
   break;
 ```
-
-### Вариант 2: По расписанию (batch)
-```typescript
-// Cron job каждый час
-const unarchived = await pool.query(
-  `SELECT DISTINCT pipeline_run_id FROM raw_logs
-   WHERE archived = false`
-);
-for (const run of unarchived.rows) {
-  await runArchivist(run.pipeline_run_id);
-}
-```
-
----
-
-## Критерии успеха
-
-1. ✅ После COMPLETED в lsm_storage появляется новая запись
-2. ✅ summary_text осмысленно описывает диалог
-3. ✅ semantic_tags релевантны содержанию
-4. ✅ time_bucket корректный (текущая неделя)
 
 ---
 
@@ -145,11 +195,11 @@ for (const run of unarchived.rows) {
 
 | Тест | Статус | Дата |
 |------|--------|------|
-| T9.1 | ⏳ PENDING | - |
-| T9.2 | ⏳ PENDING | - |
-| T9.3 | ⏳ PENDING | - |
-| T9.4 | ⏳ PENDING | - |
+| T9.1 | ✅ PASSED | 2025-11-26 |
+| T9.2 | ✅ PASSED | 2025-11-26 |
+| T9.3 | ✅ PASSED | 2025-11-26 |
+| T9.4 | ✅ PASSED | 2025-11-26 |
 
 ---
 
-*Этот сценарий будет обновлён после реализации Archivist*
+*Step 9 завершён успешно!*

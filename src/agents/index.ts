@@ -364,3 +364,168 @@ export async function runFinalResponder(pipelineId: string): Promise<void> {
     throw error;
   }
 }
+
+/**
+ * Archivist Agent - Memory Creator
+ *
+ * Задача: Создать долгосрочную память (LSM) из завершённых диалогов
+ * Триггер: После COMPLETED (или по расписанию для batch processing)
+ *
+ * Текущая реализация (v1.0):
+ * - Читает raw_logs для конкретного pipeline_run
+ * - Суммаризирует диалог через LLM
+ * - Извлекает semantic_tags через LLM
+ * - Записывает в lsm_storage
+ * - Помечает raw_logs как processed
+ */
+export async function runArchivist(pipelineId: string): Promise<void> {
+  logger.info(`[Archivist] 📚 Starting for ${pipelineId}`);
+
+  try {
+    // 1. Получить данные pipeline_run
+    const pipelineResult = await pool.query(
+      `SELECT user_id, user_query, final_answer
+       FROM pipeline_runs
+       WHERE id = $1 AND status = 'COMPLETED'`,
+      [pipelineId]
+    );
+
+    if (pipelineResult.rowCount === 0) {
+      logger.warn(`[Archivist] Pipeline ${pipelineId} not found or not completed`);
+      return;
+    }
+
+    const pipeline = pipelineResult.rows[0];
+    logger.info(`[Archivist] Processing dialog for user ${pipeline.user_id}`);
+
+    // 2. Читать raw_logs для этого pipeline (ещё не обработанные)
+    const logsResult = await pool.query(
+      `SELECT id, log_type, log_data
+       FROM raw_logs
+       WHERE pipeline_run_id = $1
+         AND processed = false
+       ORDER BY created_at ASC`,
+      [pipelineId]
+    );
+
+    if (logsResult.rowCount === 0) {
+      logger.info(`[Archivist] No unprocessed logs for ${pipelineId}`);
+      return;
+    }
+
+    const logs = logsResult.rows;
+    logger.info(`[Archivist] Found ${logs.length} unprocessed logs`);
+
+    // 3. Собрать диалог для суммаризации
+    const dialogText = logs.map(log => {
+      if (log.log_type === 'USER_QUERY') {
+        return `User: ${log.log_data.query}`;
+      } else if (log.log_type === 'SYSTEM_RESPONSE') {
+        return `Assistant: ${log.log_data.answer}`;
+      }
+      return '';
+    }).filter(Boolean).join('\n\n');
+
+    logger.info(`[Archivist] Dialog text: ${dialogText.length} chars`);
+
+    // 4. Вызвать LLM для суммаризации и извлечения тегов
+    logger.info(`[Archivist] 🤖 Calling LLM for summarization...`);
+
+    const archivistPrompt = `You are an archivist. Analyze this conversation and create a memory record.
+
+CONVERSATION:
+${dialogText}
+
+Respond in JSON format with exactly these fields:
+{
+  "summary": "A 1-2 sentence summary of what was discussed, focusing on key facts and user preferences",
+  "tags": ["tag1", "tag2", "tag3"] // 3-5 relevant keywords/topics as lowercase strings
+}
+
+Important:
+- Summary should capture the essence of the conversation
+- Tags should be useful for future retrieval (topics, entities, preferences mentioned)
+- Keep tags simple and lowercase (e.g., "programming", "preferences", "typescript")`;
+
+    const llmResponse = await createChatCompletion({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'user', content: archivistPrompt }
+      ],
+      temperature: 0.3, // Lower temperature for more consistent JSON
+      max_tokens: 500
+    });
+
+    logger.info(`[Archivist] LLM responded: ${llmResponse.length} chars`);
+
+    // 5. Парсить JSON ответ
+    let archiveData: { summary: string; tags: string[] };
+    try {
+      // Извлечь JSON из ответа (может быть обёрнут в markdown)
+      const jsonMatch = llmResponse.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in response');
+      }
+      archiveData = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      logger.error(`[Archivist] Failed to parse LLM response:`, llmResponse);
+      // Fallback: создать базовую запись
+      archiveData = {
+        summary: `Dialog about: ${pipeline.user_query.substring(0, 100)}`,
+        tags: extractSimpleKeywords(pipeline.user_query)
+      };
+    }
+
+    logger.info(`[Archivist] Summary: "${archiveData.summary.substring(0, 80)}..."`);
+    logger.info(`[Archivist] Tags: [${archiveData.tags.join(', ')}]`);
+
+    // 6. Вычислить time_bucket (ISO week format: 2025-W47)
+    const now = new Date();
+    const timeBucket = getISOWeek(now);
+    logger.info(`[Archivist] Time bucket: ${timeBucket}`);
+
+    // 7. Записать в lsm_storage
+    const logIds = logs.map(l => l.id);
+
+    await pool.query(
+      `INSERT INTO lsm_storage (user_id, time_bucket, semantic_tags, summary_text, source_run_ids)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        pipeline.user_id,
+        timeBucket,
+        archiveData.tags,
+        archiveData.summary,
+        [pipelineId] // source_run_ids - массив UUID
+      ]
+    );
+
+    logger.info(`[Archivist] ✅ Created LSM record`);
+
+    // 8. Пометить raw_logs как обработанные
+    await pool.query(
+      `UPDATE raw_logs
+       SET processed = true, processed_at = NOW()
+       WHERE id = ANY($1)`,
+      [logIds]
+    );
+
+    logger.info(`[Archivist] ✅ Marked ${logIds.length} logs as processed`);
+    logger.info(`[Archivist] ✅ Completed for ${pipelineId}`);
+
+  } catch (error) {
+    logger.error(`[Archivist] ❌ Error for ${pipelineId}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Get ISO week string (e.g., "2025-W47")
+ */
+function getISOWeek(date: Date): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${d.getUTCFullYear()}-W${weekNo.toString().padStart(2, '0')}`;
+}
