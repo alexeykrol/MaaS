@@ -1,0 +1,524 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ================================================================ -->
+<!-- MaaS Context Example 3: MATURE PROJECT (Rich Memory, Full Context) -->
+<!-- ================================================================ -->
+<!--
+  Scenario:
+  - User's 50th query in a mature project (3 months old)
+  - Rich episodic memory (100+ facts extracted)
+  - Semantic memory populated (10 insights from reflection cycles)
+  - Recent conversation history (last 10 messages)
+  - External knowledge (RAG results from uploaded docs)
+
+  Expected token usage: ~7500 tokens (approaching budget limit)
+  Sections included:
+    - Micro-instruction (~150 tokens)
+    - Background information (~250 tokens)
+    - Semantic memory (5 insights) (~500 tokens)
+    - Recent messages (10) (~1500 tokens)
+    - Relevant facts (10) (~1200 tokens)
+    - External knowledge (3 chunks) (~900 tokens)
+    - Metadata (~100 tokens)
+    Total: ~4600 tokens (conservative estimate)
+
+  Note: In reality, this would be closer to 6-7k with more detailed messages and facts
+-->
+
+<maas_context
+  version="1.0"
+  project_id="proj_003"
+  token_budget="8000"
+  generated_at="2025-11-22T16:45:00Z"
+  scenario="mature_project_50th_query"
+>
+
+  <!-- =========================================== -->
+  <!-- MICRO-INSTRUCTION -->
+  <!-- =========================================== -->
+  <context_reading_guide>
+    This context is structured for optimal comprehension.
+
+    **Priority Markers:**
+    - ⭐ = Critical (must always consider)
+    - 🔴 = High priority insight/decision
+    - 📌 = Pinned fact (always relevant to current context)
+
+    **Sections ordered by priority:**
+    1. &lt;background_information&gt; - Project mission and goals (ALWAYS consider)
+    2. &lt;semantic_memory&gt; - Accumulated wisdom (insights)
+    3. &lt;episodic_memory&gt; - Specific facts and recent events
+    4. &lt;external_knowledge&gt; - RAG results from documents
+
+    **Source Attribution:**
+    - Each fact/insight includes `source` and `date` attributes
+    - Knowledge `level` indicates certainty: fact > interpretation > hypothesis
+
+    **How to use this context:**
+    - Start with mission and goals (understand "why")
+    - Review insights for patterns and learnings
+    - Check facts for specific details
+    - Cross-reference with external knowledge when available
+    - Cite sources when stating information
+  </context_reading_guide>
+
+  <!-- =========================================== -->
+  <!-- BACKGROUND INFORMATION (permanent) -->
+  <!-- =========================================== -->
+  <background_information priority="critical">
+    <mission>⭐ Scale an e-commerce business from $2M to $10M ARR within 18 months through data-driven decision making and operational excellence</mission>
+    <goals>
+      <goal>Increase monthly revenue from $165k to $830k (5x growth)</goal>
+      <goal>Improve customer LTV from $180 to $400</goal>
+      <goal>Reduce customer acquisition cost (CAC) from $90 to $60</goal>
+      <goal>Achieve 40% gross margin (currently 28%)</goal>
+      <goal>Expand from US market to EU and APAC by Q3 2026</goal>
+    </goals>
+    <constraints>
+      <constraint>Budget: $3M in venture capital funding, burn rate must stay below $150k/month</constraint>
+      <constraint>Team: 12 people (4 eng, 3 marketing, 2 ops, 3 support), hiring freeze until Q2 2026</constraint>
+      <constraint>Cash runway: 20 months from today (must hit profitability or raise Series A by Nov 2026)</constraint>
+      <constraint>Tech debt: Legacy PHP monolith must be migrated to microservices (blocks scaling)</constraint>
+      <constraint>Compliance: Must achieve SOC 2 certification by Q2 2026 for enterprise deals</constraint>
+    </constraints>
+  </background_information>
+
+  <!-- =========================================== -->
+  <!-- SEMANTIC MEMORY (insights from reflection cycles) -->
+  <!-- =========================================== -->
+  <semantic_memory retrieved="5" total_insights="10">
+    <insights>
+      <!-- Retrieved via vector search: top 5 most relevant insights for current query -->
+
+      <insight
+        id="ins_001"
+        importance="0.95"
+        source_episodes="[ep_012, ep_018, ep_025, ep_031]"
+        extracted_at="2025-10-20T11:30:00Z"
+      >
+        🔴 Customer churn spikes 30% when order fulfillment exceeds 5 days. Warehouse optimization is critical before scaling marketing spend.
+      </insight>
+
+      <insight
+        id="ins_003"
+        importance="0.90"
+        source_episodes="[ep_020, ep_028, ep_035]"
+        extracted_at="2025-11-01T14:15:00Z"
+      >
+        🔴 Facebook ads CAC increased 40% in Q4 2025 due to iOS 14 privacy changes. Diversification to Google Shopping and TikTok reduced blended CAC by 25%.
+      </insight>
+
+      <insight
+        id="ins_005"
+        importance="0.88"
+        source_episodes="[ep_040, ep_042, ep_048]"
+        extracted_at="2025-11-18T09:00:00Z"
+      >
+        🔴 High-value customers (LTV > $500) prefer phone support over chat. Investing in premium support tier could increase retention by 15%.
+      </insight>
+
+      <insight
+        id="ins_007"
+        importance="0.82"
+        source_episodes="[ep_015, ep_022, ep_030, ep_037, ep_045]"
+        extracted_at="2025-11-10T16:20:00Z"
+      >
+        Product returns are 3x higher for items without video demos. Adding video to top 20 SKUs reduced return rate from 18% to 6%.
+      </insight>
+
+      <insight
+        id="ins_009"
+        importance="0.75"
+        source_episodes="[ep_038, ep_041, ep_046]"
+        extracted_at="2025-11-15T10:45:00Z"
+      >
+        Email campaigns sent on Tuesday 10am PST have 35% higher open rates than other times. Automated send-time optimization could increase revenue by $8k/month.
+      </insight>
+
+    </insights>
+  </semantic_memory>
+
+  <!-- =========================================== -->
+  <!-- EPISODIC MEMORY -->
+  <!-- =========================================== -->
+  <episodic_memory>
+
+    <!-- RECENT MESSAGES (last 10 messages from current session) -->
+    <recent_messages count="10" session_id="sess_025">
+
+      <message role="user" timestamp="2025-11-22T16:20:00Z" id="msg_050">
+        Our CAC is still too high at $85. The investors want to see it below $60 by end of Q1. What levers can we pull?
+      </message>
+
+      <message role="assistant" timestamp="2025-11-22T16:22:00Z">
+        Based on our previous analysis, here are the highest-impact levers:
+
+        1. **Diversify ad channels** (current mix: 70% Facebook, 20% Google, 10% TikTok)
+           - We saw 25% CAC reduction when we shifted to Google Shopping in Nov
+           - Recommendation: Increase Google Shopping to 30%, test Pinterest ads
+
+        2. **Improve conversion rate** (currently 2.1%)
+           - Adding video demos to top 20 SKUs reduced return rate by 12% (less wasted ad spend)
+           - Next: A/B test checkout flow simplification (could increase CVR to 2.8%)
+
+        3. **Optimize email remarketing** (60% of revenue comes from repeat customers)
+           - Our Tuesday 10am sends have 35% higher opens
+           - Recommendation: Implement send-time optimization across all campaigns
+
+        Expected impact: $85 → $62 CAC (27% reduction) if all three levers executed by Feb 2026.
+      </message>
+
+      <message role="user" timestamp="2025-11-22T16:25:00Z" id="msg_051">
+        That's helpful, but I'm concerned about the warehouse issue. If we increase ad spend and can't fulfill orders fast enough, churn will spike.
+      </message>
+
+      <message role="assistant" timestamp="2025-11-22T16:27:00Z">
+        Critical point. Our data shows churn spikes 30% when fulfillment exceeds 5 days. Current average: 4.2 days (safe), but you're at 85% warehouse capacity.
+
+        **Warehouse Capacity Analysis:**
+        - Current: 1000 orders/day max, averaging 850/day (85% utilization)
+        - If CAC drops to $60 → marketing spend increases → likely 1200 orders/day
+        - Result: Fulfillment delays, churn spike, negative customer reviews
+
+        **Options:**
+        1. Expand warehouse capacity BEFORE scaling ads (3-week lead time, $40k investment)
+        2. Throttle ad spend to match warehouse capacity (safer, but slower growth)
+        3. Outsource fulfillment to 3PL (faster, but 15% margin hit)
+
+        Recommendation: Option 1 (warehouse expansion). It aligns with your growth goals and preserves margin.
+      </message>
+
+      <message role="user" timestamp="2025-11-22T16:30:00Z" id="msg_052">
+        Makes sense. What's the timeline and cost breakdown for warehouse expansion?
+      </message>
+
+      <message role="assistant" timestamp="2025-11-22T16:32:00Z">
+        **Warehouse Expansion Plan:**
+
+        **Timeline:** 3 weeks
+        - Week 1: Negotiate lease extension, order shelving ($15k)
+        - Week 2: Install shelving, hire 3 temp workers ($8k/month recurring)
+        - Week 3: Train staff, migrate inventory
+
+        **One-time costs:** $40k
+        **Recurring costs:** $8k/month (temp workers)
+
+        **Capacity increase:** 1000 → 1500 orders/day (50% increase)
+
+        **Break-even:** If this enables you to scale ads and hit $62 CAC, additional revenue = $120k/month. ROI: 3 months.
+
+        **Risk:** If growth doesn't materialize, you're paying $8k/month for unused capacity.
+      </message>
+
+      <message role="user" timestamp="2025-11-22T16:35:00Z" id="msg_053">
+        Good analysis. But we're also dealing with the tech debt issue - the PHP monolith is slowing down our dev team. Should we prioritize that over warehouse expansion?
+      </message>
+
+      <message role="assistant" timestamp="2025-11-22T16:37:00Z">
+        Let's compare:
+
+        **Warehouse Expansion:**
+        - Impact: Enables 5x growth (direct path to $10M ARR goal)
+        - Timeline: 3 weeks
+        - Cost: $40k one-time + $8k/month
+        - Risk: Low (proven demand, just need capacity)
+
+        **Tech Debt (PHP → Microservices):**
+        - Impact: Faster dev velocity (30% improvement), better reliability
+        - Timeline: 6 months (based on similar migrations)
+        - Cost: $150k (4 engineers for 6 months)
+        - Risk: Medium (scope creep, bugs during migration)
+
+        **Recommendation:** Warehouse expansion first (quick win, unblocks growth). Tech debt migration in Q2 2026 (when you have more cash runway and can afford disruption).
+
+        **Sequencing:**
+        Dec 2025: Warehouse expansion
+        Jan-Mar 2026: Scale ads, hit $62 CAC, prove growth model
+        Apr-Sep 2026: Tech debt migration (funded by growth)
+      </message>
+
+      <message role="user" timestamp="2025-11-22T16:40:00Z" id="msg_054">
+        That makes sense. One more thing - we need SOC 2 by Q2 for enterprise deals. Does that fit into this timeline?
+      </message>
+
+      <message role="assistant" timestamp="2025-11-22T16:42:00Z">
+        **SOC 2 Certification Timeline:**
+
+        **Standard timeline:** 6-9 months
+        - Month 1-2: Gap assessment, policy writing
+        - Month 3-5: Implementation (access controls, logging, monitoring)
+        - Month 6-9: Audit preparation, auditor engagement, certification
+
+        **Your constraint:** Need it by Q2 2026 (6 months from now)
+
+        **Fast-track option:** Hire SOC 2 consultant ($30k), parallel-track with warehouse expansion
+        - Start Jan 2026
+        - Target: June 2026 certification
+
+        **Impact on tech debt migration:** SOC 2 implementation will consume ~20% of eng capacity (compliance work). This delays microservices migration by ~1 month.
+
+        **Revised timeline:**
+        - Dec 2025: Warehouse expansion
+        - Jan-Jun 2026: SOC 2 implementation (parallel with ad scaling)
+        - May-Nov 2026: Tech debt migration (delayed 1 month, but acceptable)
+      </message>
+
+      <message role="user" timestamp="2025-11-22T16:44:00Z" id="msg_055">
+        Perfect. Let's proceed with warehouse expansion in Dec, SOC 2 in Jan. Can you draft a board update summarizing this plan?
+      </message>
+
+      <message role="assistant" timestamp="2025-11-22T16:45:00Z">
+        I'll draft a board update covering:
+        1. Current state (CAC $85, warehouse 85% capacity, SOC 2 needed)
+        2. Goals (CAC $60, 5x growth, enterprise-ready)
+        3. Plan (warehouse Dec, SOC 2 Jan-Jun, tech debt Q3-Q4 2026)
+        4. Investment ($40k warehouse, $30k SOC 2 consultant, $150k tech debt)
+        5. Expected outcomes ($10M ARR, SOC 2 certified, scalable tech)
+
+        I'll prepare that now and you can review before sending to the board.
+      </message>
+
+    </recent_messages>
+
+    <!-- RELEVANT FACTS (retrieved via vector search) -->
+    <relevant_facts retrieved="10" total_facts="100">
+
+      <fact
+        id="fact_045"
+        subject="CAC trend analysis"
+        source="msg_032"
+        date="2025-11-05"
+        level="fact"
+      >
+        📌 CAC increased from $65 (Aug) to $85 (Nov) due to iOS 14 privacy changes affecting Facebook ads. Google Shopping CAC remained stable at $55.
+      </fact>
+
+      <fact
+        id="fact_052"
+        subject="Warehouse capacity limit"
+        source="msg_038"
+        date="2025-11-10"
+        level="fact"
+      >
+        📌 Current warehouse capacity: 1000 orders/day maximum. Currently processing 850/day (85% utilization). Expansion requires 3 weeks + $40k investment.
+      </fact>
+
+      <fact
+        id="fact_058"
+        subject="Churn rate correlation"
+        source="msg_041"
+        date="2025-11-12"
+        level="fact"
+      >
+        🔴 Customer churn increases 30% when order fulfillment exceeds 5 days. Current average: 4.2 days (within acceptable range).
+      </fact>
+
+      <fact
+        id="fact_064"
+        subject="Tech debt impact on velocity"
+        source="msg_043"
+        date="2025-11-14"
+        level="interpretation"
+      >
+        PHP monolith slows dev velocity by ~30% (engineers estimate). Migration to microservices would cost $150k and take 6 months.
+      </fact>
+
+      <fact
+        id="fact_071"
+        subject="SOC 2 requirement for enterprise"
+        source="msg_047"
+        date="2025-11-18"
+        level="fact"
+      >
+        📌 Enterprise customers (deals > $100k) require SOC 2 certification. 3 deals worth $400k total are blocked pending certification. Target: Q2 2026.
+      </fact>
+
+      <fact
+        id="fact_075"
+        subject="Marketing channel performance"
+        source="msg_036"
+        date="2025-11-08"
+        level="fact"
+      >
+        Current ad spend mix: 70% Facebook ($90 CAC), 20% Google Shopping ($55 CAC), 10% TikTok ($78 CAC). Blended CAC: $85.
+      </fact>
+
+      <fact
+        id="fact_081"
+        subject="Conversion rate optimization opportunity"
+        source="msg_044"
+        date="2025-11-15"
+        level="hypothesis"
+      >
+        A/B test hypothesis: Simplifying checkout flow from 4 steps to 2 steps could increase CVR from 2.1% to 2.8% (33% increase). Test planned for Dec 2025.
+      </fact>
+
+      <fact
+        id="fact_085"
+        subject="Email send-time optimization"
+        source="msg_046"
+        date="2025-11-17"
+        level="fact"
+      >
+        Data analysis: Emails sent Tuesday 10am PST have 35% higher open rates vs other times. Implementing send-time optimization could increase revenue by $8k/month.
+      </fact>
+
+      <fact
+        id="fact_092"
+        subject="Video content impact on returns"
+        source="msg_030"
+        date="2025-11-02"
+        level="fact"
+      >
+        Adding video demos to top 20 SKUs reduced return rate from 18% to 6% (12% decrease). This saves ~$15k/month in return processing costs.
+      </fact>
+
+      <fact
+        id="fact_098"
+        subject="Customer support preferences"
+        source="msg_048"
+        date="2025-11-19"
+        level="fact"
+      >
+        High-LTV customers ($500+) prefer phone support over chat (survey: 72% preference). Adding premium phone support tier could increase retention by 15%.
+      </fact>
+
+    </relevant_facts>
+
+  </episodic_memory>
+
+  <!-- =========================================== -->
+  <!-- EXTERNAL KNOWLEDGE (RAG results from uploaded documents) -->
+  <!-- =========================================== -->
+  <external_knowledge retrieved="3" source="rag">
+
+    <chunk
+      source="doc_business_plan_2025.pdf"
+      relevance="0.92"
+      page="8"
+      date="2025-08-15"
+    >
+      **2025 Growth Strategy (excerpt)**
+
+      Target: Scale from $2M to $10M ARR in 18 months through:
+      1. CAC optimization (target: $60, currently $90)
+      2. LTV improvement (target: $400, currently $180)
+      3. Operational excellence (fulfillment, support, tech infrastructure)
+
+      Key milestones:
+      - Q4 2025: Prove unit economics at scale (CAC < $65, LTV > $250)
+      - Q1 2026: SOC 2 certification (unlock enterprise market)
+      - Q2 2026: Expand to EU market
+      - Q3 2026: Raise Series A ($8-12M)
+    </chunk>
+
+    <chunk
+      source="doc_investor_update_q3_2025.pdf"
+      relevance="0.87"
+      page="3"
+      date="2025-09-30"
+    >
+      **Q3 2025 Performance Summary**
+
+      Revenue: $495k (vs $450k target, +10%)
+      CAC: $85 (vs $75 target, +13% - needs improvement)
+      LTV: $210 (vs $200 target, +5%)
+      Gross Margin: 31% (vs 30% target, on track)
+
+      Concerns raised by investors:
+      - CAC increasing (iOS 14 impact on Facebook ads)
+      - Warehouse capacity constraints (operating at 82% utilization)
+      - Tech debt slowing product development
+
+      Action items:
+      - Diversify marketing channels (reduce Facebook dependency)
+      - Explore warehouse expansion or 3PL partnership
+      - Evaluate microservices migration (Q2 2026 target)
+    </chunk>
+
+    <chunk
+      source="url_https://stripe.com/guides/soc2-compliance"
+      relevance="0.78"
+      fetched="2025-11-20"
+    >
+      **SOC 2 Compliance Timeline (industry guide)**
+
+      Typical timeline: 6-9 months
+
+      Phase 1 (1-2 months): Gap assessment
+      - Review current security practices
+      - Identify compliance gaps
+      - Create remediation plan
+
+      Phase 2 (3-5 months): Implementation
+      - Implement access controls
+      - Set up logging and monitoring
+      - Document policies and procedures
+
+      Phase 3 (2-3 months): Audit
+      - Engage third-party auditor
+      - Observation period (3-12 months)
+      - Issue final report
+
+      Fast-track option: Hire SOC 2 consultant ($25-40k) to compress Phase 1-2 to 3 months.
+    </chunk>
+
+  </external_knowledge>
+
+  <!-- =========================================== -->
+  <!-- METADATA -->
+  <!-- =========================================== -->
+  <metadata>
+    <token_usage>
+      <micro_instruction>180</micro_instruction>
+      <background_information>280</background_information>
+      <semantic_memory>
+        <insights>620</insights>
+      </semantic_memory>
+      <episodic_memory>
+        <recent_messages>2200</recent_messages>
+        <relevant_facts>1350</relevant_facts>
+      </episodic_memory>
+      <external_knowledge>980</external_knowledge>
+      <metadata_section>120</metadata_section>
+      <total>5730</total>
+    </token_usage>
+    <retrieval_stats>
+      <insights_total>10</insights_total>
+      <insights_retrieved>5</insights_retrieved>
+      <facts_total>100</facts_total>
+      <facts_retrieved>10</facts_retrieved>
+      <rag_chunks_retrieved>3</rag_chunks_retrieved>
+      <vector_search_queries>
+        <query>CAC optimization strategies</query>
+        <query>warehouse capacity expansion</query>
+        <query>SOC 2 compliance timeline</query>
+        <query>tech debt migration planning</query>
+      </vector_search_queries>
+    </retrieval_stats>
+    <progressive_detailing>
+      <applied>true</applied>
+      <strategy>
+        Budget: 8000 tokens available
+        Used: 5730 tokens (72% utilization)
+        Reserved for user query + response: 2270 tokens (28%)
+
+        Detailing levels applied:
+        - Insights: Top 5 (out of 10 available) by relevance
+        - Recent messages: Last 10 (full conversation context)
+        - Facts: Top 10 (out of 100) by vector similarity
+        - RAG: Top 3 chunks by relevance
+
+        If budget was lower (4000 tokens):
+        - Would reduce to: 3 insights, 5 messages, 5 facts, 0 RAG
+      </strategy>
+    </progressive_detailing>
+    <notes>
+      Mature project (3 months old, 50 episodes, 100 facts, 10 insights).
+      Reflection cycles have run 3 times (every 20 episodes).
+      Rich context enables nuanced decision-making with historical patterns.
+      External knowledge (RAG) provides additional validation from business docs.
+      Progressive detailing optimizes token usage while maintaining quality.
+    </notes>
+  </metadata>
+
+</maas_context>

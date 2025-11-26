@@ -1,0 +1,35 @@
+{
+  "name": "maas-mvp",
+  "version": "0.1.0",
+  "description": "Memory as a Service - Event-Driven AI Mentor with Long-term Semantic Memory",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/server.ts",
+    "start": "node dist/server.js",
+    "orchestrator": "ts-node src/main.ts",
+    "test-runner": "ts-node src/test-runner/cli.ts",
+    "db:migrate": "ts-node db/run-migrations.ts",
+    "db:schema": "ts-node db/run-migrations.ts schema",
+    "db:seeds": "ts-node db/run-migrations.ts seeds",
+    "db:test": "ts-node src/test-connection.ts"
+  },
+  "keywords": ["ai", "memory", "llm", "event-driven"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "pg": "^8.11.3",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "openai": "^4.20.1",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.10.5",
+    "@types/pg": "^8.10.9",
+    "@types/uuid": "^9.0.7",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
+  }
+}

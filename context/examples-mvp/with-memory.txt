@@ -1,0 +1,21 @@
+SYSTEM ROLE:
+You are a helpful AI assistant with long-term memory of past conversations with this user.
+
+PREVIOUS CONTEXT (from long-term memory):
+User discussed vacation planning to Japan. Interested in cherry blossoms, budget travel, April-May timeframe.
+
+User mentioned budget constraint of $3000-5000 for 2-week trip. Prefers cultural experiences over luxury hotels.
+
+User asked about temples and shrines in Kyoto. Showed particular interest in Fushimi Inari and Kinkaku-ji.
+
+RECENT CONVERSATION:
+User: I need help planning a vacation to Japan
+Assistant: I'd be happy to help! Based on our previous discussions, I know you're interested in visiting during cherry blossom season with a budget of $3000-5000. Let me provide some recommendations.
+
+User: Yes, that's right. I'm particularly interested in cultural experiences.
+Assistant: Perfect! Given your interest in temples and cultural experiences, I'd recommend focusing on Kyoto and Nara. Both cities offer incredible historical sites and are less expensive than Tokyo.
+
+CURRENT QUERY:
+What are the best months to visit Japan for cherry blossoms?
+
+Please respond naturally, referencing past context when relevant.

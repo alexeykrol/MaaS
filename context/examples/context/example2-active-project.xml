@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ================================================================ -->
+<!-- MaaS Context Example 2: ACTIVE PROJECT (Some Facts, Recent Messages) -->
+<!-- ================================================================ -->
+<!--
+  Scenario:
+  - User's 10th query in an active project (2 weeks old)
+  - Some facts extracted (episodic memory growing)
+  - No insights yet (reflection cycle hasn't run)
+  - Recent conversation history (last 5 messages)
+
+  Expected token usage: ~3000 tokens
+  Sections included:
+    - Micro-instruction (~150 tokens)
+    - Background information (~220 tokens)
+    - Recent messages (5) (~800 tokens)
+    - Relevant facts (5) (~580 tokens)
+    - Metadata (~50 tokens)
+    Total: ~1800-2000 tokens (conservative estimate)
+-->
+
+<maas_context
+  version="1.0"
+  project_id="proj_002"
+  token_budget="8000"
+  generated_at="2025-11-22T14:30:00Z"
+  scenario="active_project_10th_query"
+>
+
+  <!-- =========================================== -->
+  <!-- MICRO-INSTRUCTION -->
+  <!-- =========================================== -->
+  <context_reading_guide>
+    This context is structured for optimal comprehension.
+
+    **Priority Markers:**
+    - ⭐ = Critical (must always consider)
+    - 🔴 = High priority insight/decision
+    - 📌 = Pinned fact (always relevant to current context)
+
+    **Sections ordered by priority:**
+    1. &lt;background_information&gt; - Project mission and goals (ALWAYS consider)
+    2. &lt;semantic_memory&gt; - Accumulated wisdom (insights)
+    3. &lt;episodic_memory&gt; - Specific facts and recent events
+
+    **Source Attribution:**
+    - Each fact/insight includes `source` and `date` attributes
+    - Knowledge `level` indicates certainty: fact > interpretation > hypothesis
+
+    **How to use this context:**
+    - Start with mission and goals (understand "why")
+    - Review insights for patterns and learnings
+    - Check facts for specific details
+    - Cite sources when stating information
+  </context_reading_guide>
+
+  <!-- =========================================== -->
+  <!-- BACKGROUND INFORMATION (permanent) -->
+  <!-- =========================================== -->
+  <background_information priority="critical">
+    <mission>⭐ Build an AI-powered SaaS product for project managers to reduce meeting overhead and improve team alignment</mission>
+    <goals>
+      <goal>Launch MVP by Q1 2026 (12 weeks remaining)</goal>
+      <goal>Acquire 50 beta users by end of Q1</goal>
+      <goal>Keep development cost under $30k</goal>
+      <goal>Achieve 80% user satisfaction score</goal>
+    </goals>
+    <constraints>
+      <constraint>Budget: $30k total for Q4-Q1</constraint>
+      <constraint>Team: Solo founder + 2 part-time contractors</constraint>
+      <constraint>Tech stack: Must use TypeScript + PostgreSQL (existing expertise)</constraint>
+      <constraint>Timeline: Non-negotiable Q1 launch (investor demo scheduled)</constraint>
+    </constraints>
+  </background_information>
+
+  <!-- =========================================== -->
+  <!-- SEMANTIC MEMORY (empty - reflection hasn't run yet) -->
+  <!-- =========================================== -->
+  <semantic_memory retrieved="0" total_insights="0">
+    <insights>
+      <!-- No insights yet - project is only 2 weeks old, reflection cycle runs every 20 messages -->
+      <!-- Note: Reflection will trigger after 20 episodes, currently at 10 episodes -->
+    </insights>
+  </semantic_memory>
+
+  <!-- =========================================== -->
+  <!-- EPISODIC MEMORY -->
+  <!-- =========================================== -->
+  <episodic_memory>
+
+    <!-- RECENT MESSAGES (last 5 messages from current session) -->
+    <recent_messages count="5" session_id="sess_005">
+
+      <message role="user" timestamp="2025-11-22T14:10:00Z" id="msg_010">
+        I'm worried about the timeline. Q1 launch is 12 weeks away but we haven't even finalized the MVP feature list yet.
+      </message>
+
+      <message role="assistant" timestamp="2025-11-22T14:12:00Z">
+        Let's focus on the core value proposition. Based on our earlier discussions, the must-have features for MVP are:
+        1. Meeting summary generation (AI)
+        2. Action item extraction
+        3. Basic team dashboard
+
+        We previously decided to cut: Slack integration, calendar sync, and analytics (can be added post-MVP).
+        Does this still align with your vision?
+      </message>
+
+      <message role="user" timestamp="2025-11-22T14:15:00Z" id="msg_011">
+        Yes, but I'm second-guessing the decision to cut Slack integration.
+        Most PMs use Slack heavily. Won't that hurt adoption?
+      </message>
+
+      <message role="assistant" timestamp="2025-11-22T14:18:00Z">
+        Valid concern. Let's evaluate:
+        - Slack integration adds ~2 weeks to timeline (OAuth setup, webhook handling, rate limits)
+        - Alternative: Users can copy-paste meeting notes into Slack manually (reduces friction but keeps MVP lean)
+        - Post-MVP: Slack integration becomes top priority feature
+
+        Your constraint is "Non-negotiable Q1 launch." Adding 2 weeks risks missing that deadline.
+        Would you prefer to delay launch or launch without Slack integration?
+      </message>
+
+      <message role="user" timestamp="2025-11-22T14:20:00Z" id="msg_012">
+        You're right. Let's stick with the original plan - launch lean, add Slack later.
+        But I need to validate that PMs will actually adopt a tool without Slack integration.
+      </message>
+
+    </recent_messages>
+
+    <!-- RELEVANT FACTS (retrieved via vector search based on current query) -->
+    <relevant_facts retrieved="5" total_facts="12">
+
+      <fact
+        id="fact_001"
+        subject="MVP feature list finalized"
+        source="msg_005"
+        date="2025-11-10"
+        level="decision"
+      >
+        📌 MVP must include: (1) Meeting summary generation (AI), (2) Action item extraction, (3) Basic team dashboard. Slack integration, calendar sync, analytics deferred to post-MVP.
+      </fact>
+
+      <fact
+        id="fact_003"
+        subject="Technical stack decision"
+        source="msg_003"
+        date="2025-11-08"
+        level="decision"
+      >
+        Tech stack: TypeScript (frontend + backend), PostgreSQL (database), OpenAI API (AI features). Rationale: Existing team expertise, fast development.
+      </fact>
+
+      <fact
+        id="fact_007"
+        subject="Target user persona"
+        source="msg_002"
+        date="2025-11-08"
+        level="fact"
+      >
+        Target users: Mid-level project managers (3-7 years experience) at tech companies with 10-50 employees. Pain point: Too many meetings, unclear action items.
+      </fact>
+
+      <fact
+        id="fact_009"
+        subject="Budget allocation"
+        source="msg_006"
+        date="2025-11-12"
+        level="fact"
+      >
+        $30k budget breakdown: $12k development (contractors), $8k infrastructure (hosting, APIs), $5k beta user acquisition, $5k contingency.
+      </fact>
+
+      <fact
+        id="fact_011"
+        subject="Investor demo scheduled"
+        source="msg_008"
+        date="2025-11-15"
+        level="fact"
+      >
+        📌 Investor demo scheduled for Feb 15, 2026. Must have working MVP with at least 20 active beta users. Non-negotiable deadline.
+      </fact>
+
+    </relevant_facts>
+
+  </episodic_memory>
+
+  <!-- =========================================== -->
+  <!-- EXTERNAL KNOWLEDGE (none for this query) -->
+  <!-- =========================================== -->
+  <external_knowledge retrieved="0" source="rag">
+    <!-- No external knowledge needed for this query (internal project discussion) -->
+  </external_knowledge>
+
+  <!-- =========================================== -->
+  <!-- METADATA -->
+  <!-- =========================================== -->
+  <metadata>
+    <token_usage>
+      <micro_instruction>150</micro_instruction>
+      <background_information>250</background_information>
+      <semantic_memory>0</semantic_memory>
+      <episodic_memory>
+        <recent_messages>800</recent_messages>
+        <relevant_facts>580</relevant_facts>
+      </episodic_memory>
+      <external_knowledge>0</external_knowledge>
+      <metadata_section>50</metadata_section>
+      <total>1830</total>
+    </token_usage>
+    <retrieval_stats>
+      <insights_total>0</insights_total>
+      <insights_retrieved>0</insights_retrieved>
+      <facts_total>12</facts_total>
+      <facts_retrieved>5</facts_retrieved>
+      <rag_chunks_retrieved>0</rag_chunks_retrieved>
+      <vector_search_queries>
+        <query>Slack integration decision</query>
+        <query>MVP timeline and features</query>
+      </vector_search_queries>
+    </retrieval_stats>
+    <notes>
+      Active project (2 weeks old, 10 episodes).
+      Reflection cycle will trigger after 10 more episodes (at 20 total).
+      Facts extracted from previous conversations provide context for current decision.
+      User is questioning previous decision (Slack integration) - relevant facts surface the original rationale.
+    </notes>
+  </metadata>
+
+</maas_context>

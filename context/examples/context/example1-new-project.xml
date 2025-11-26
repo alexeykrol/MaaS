@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- ================================================================ -->
+<!-- MaaS Context Example 1: NEW PROJECT (Empty Memory)               -->
+<!-- ================================================================ -->
+<!--
+  Scenario:
+  - User's first query in a new project
+  - No insights yet (semantic memory empty)
+  - No facts yet (episodic memory empty)
+  - Only mission and recent message
+
+  Expected token usage: ~500 tokens
+  Sections included:
+    - Micro-instruction (~150 tokens)
+    - Background information (~220 tokens)
+    - Recent message (1) (~130 tokens)
+    Total: ~500 tokens
+-->
+
+<maas_context
+  version="1.0"
+  project_id="proj_001"
+  token_budget="8000"
+  generated_at="2025-11-22T09:00:00Z"
+  scenario="first_query_new_project"
+>
+
+  <!-- =========================================== -->
+  <!-- MICRO-INSTRUCTION -->
+  <!-- =========================================== -->
+  <context_reading_guide>
+    This context is structured for optimal comprehension.
+
+    **Priority Markers:**
+    - ⭐ = Critical (must always consider)
+    - 🔴 = High priority insight/decision
+    - 📌 = Pinned fact (always relevant to current context)
+
+    **Sections ordered by priority:**
+    1. &lt;background_information&gt; - Project mission and goals (ALWAYS consider)
+    2. &lt;semantic_memory&gt; - Accumulated wisdom (insights)
+    3. &lt;episodic_memory&gt; - Specific facts and recent events
+
+    **Source Attribution:**
+    - Each fact/insight includes `source` and `date` attributes
+    - Knowledge `level` indicates certainty: fact > interpretation > hypothesis
+
+    **How to use this context:**
+    - Start with mission and goals (understand "why")
+    - Review insights for patterns and learnings
+    - Check facts for specific details
+    - Cite sources when stating information
+  </context_reading_guide>
+
+  <!-- =========================================== -->
+  <!-- BACKGROUND INFORMATION (permanent) -->
+  <!-- =========================================== -->
+  <background_information priority="critical">
+    <mission>⭐ Help freelance consultants build their personal brand and grow their client base through AI-powered content and outreach</mission>
+    <goals>
+      <goal>Generate 10 qualified leads per month</goal>
+      <goal>Reduce time spent on content creation by 50%</goal>
+      <goal>Maintain authentic voice in all AI-generated content</goal>
+    </goals>
+    <constraints>
+      <constraint>Budget: Maximum $200/month for tools</constraint>
+      <constraint>Time: Can dedicate only 5 hours/week to marketing</constraint>
+      <constraint>Privacy: Client data must stay confidential</constraint>
+    </constraints>
+  </background_information>
+
+  <!-- =========================================== -->
+  <!-- SEMANTIC MEMORY (empty - no insights yet) -->
+  <!-- =========================================== -->
+  <semantic_memory retrieved="0" total_insights="0">
+    <insights>
+      <!-- No insights yet - project just started -->
+    </insights>
+  </semantic_memory>
+
+  <!-- =========================================== -->
+  <!-- EPISODIC MEMORY (only first message) -->
+  <!-- =========================================== -->
+  <episodic_memory>
+
+    <!-- RECENT MESSAGES (only 1 message - first query) -->
+    <recent_messages count="1" session_id="sess_001">
+      <message role="user" timestamp="2025-11-22T09:00:00Z" id="msg_001">
+        Hi! I'm a freelance marketing consultant trying to grow my business.
+        I spend too much time on content creation and not enough on actual client work.
+        Can you help me build a system to generate authentic content consistently?
+      </message>
+    </recent_messages>
+
+    <!-- RELEVANT FACTS (empty - no facts extracted yet) -->
+    <relevant_facts retrieved="0" total_facts="0">
+      <!-- No facts yet - this is the first conversation -->
+    </relevant_facts>
+
+  </episodic_memory>
+
+  <!-- =========================================== -->
+  <!-- EXTERNAL KNOWLEDGE (none - not needed for first query) -->
+  <!-- =========================================== -->
+  <external_knowledge retrieved="0" source="rag">
+    <!-- No RAG results - first query doesn't need external knowledge -->
+  </external_knowledge>
+
+  <!-- =========================================== -->
+  <!-- METADATA -->
+  <!-- =========================================== -->
+  <metadata>
+    <token_usage>
+      <micro_instruction>150</micro_instruction>
+      <background_information>220</background_information>
+      <semantic_memory>0</semantic_memory>
+      <episodic_memory>
+        <recent_messages>130</recent_messages>
+        <relevant_facts>0</relevant_facts>
+      </episodic_memory>
+      <external_knowledge>0</external_knowledge>
+      <total>500</total>
+    </token_usage>
+    <retrieval_stats>
+      <insights_total>0</insights_total>
+      <insights_retrieved>0</insights_retrieved>
+      <facts_total>0</facts_total>
+      <facts_retrieved>0</facts_retrieved>
+      <rag_chunks_retrieved>0</rag_chunks_retrieved>
+    </retrieval_stats>
+    <notes>
+      First query in new project. No memory exists yet.
+      Context contains only mission/goals/constraints (background) + user's first message.
+      System will extract facts from this conversation and store for future retrieval.
+    </notes>
+  </metadata>
+
+</maas_context>

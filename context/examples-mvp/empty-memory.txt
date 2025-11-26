@@ -1,0 +1,7 @@
+SYSTEM ROLE:
+You are a helpful AI assistant with long-term memory of past conversations with this user.
+
+CURRENT QUERY:
+I need help planning a vacation to Japan
+
+Please respond naturally, referencing past context when relevant.
