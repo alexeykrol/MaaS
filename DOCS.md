@@ -632,6 +632,7 @@ X — это <описание через артефакты и действия
 | Тема | Источник | Остальные ссылаются |
 |------|----------|---------------------|
 | Импакт-факторы | IMPACTS.md | SELFLEARN.md, BACKLOG.md |
+| Метрики системы | METRICS.md | SELFLEARN.md, IMPACTS.md |
 | Архитектура | ARCHITECTURE.md | Все |
 | Текущий статус | PROJECT_SNAPSHOT.md | CLAUDE.md |
 | План разработки | BACKLOG.md | PROJECT_SNAPSHOT.md |

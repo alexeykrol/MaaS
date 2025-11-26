@@ -158,33 +158,17 @@
 
 ## Метрики качества (что измеряем)
 
-### Primary Metrics (цели оптимизации)
+> **Детальное описание:** см. [METRICS.md](./METRICS.md)
+>
+> METRICS.md — source of truth для всех метрик: формулы, артефакты, targets, команды для агента.
 
-| Метрика | Описание | Target | Как измерить |
-|---------|----------|--------|--------------|
-| **Retrieval Precision** | % релевантных из найденных | > 80% | LLM-judge |
-| **Retrieval Recall** | % найденных из релевантных | > 70% | Golden dataset |
-| **Context Utilization** | LLM использовал контекст | > 90% | LLM-judge |
-| **Hallucination Rate** | LLM выдумал факты | < 5% | LLM-judge |
-| **User Satisfaction** | Пользователь доволен | > 4/5 | Feedback |
+### Сводка метрик
 
-### Secondary Metrics (constraints)
-
-| Метрика | Описание | Target | Как измерить |
-|---------|----------|--------|--------------|
-| **Latency P50** | Медианное время ответа | < 2s | Timestamp |
-| **Latency P95** | 95-й перцентиль | < 5s | Timestamp |
-| **Token Cost** | Стоимость на запрос | < $0.01 | OpenAI usage |
-| **Memory Growth** | Рост LSM в день | < 100 | COUNT |
-
-### Diagnostic Metrics (понимание системы)
-
-| Метрика | Описание | Как измерить |
-|---------|----------|--------------|
-| **Hit Rate** | % запросов с memories | COUNT |
-| **Avg Memories Found** | Среднее найденных | AVG |
-| **Tag Overlap Distribution** | Распределение совпадений | Histogram |
-| **Memory Age at Retrieval** | Возраст используемых memories | AVG |
+| Категория | Метрики | Target |
+|-----------|---------|--------|
+| **Primary** | Retrieval Precision, Recall, Context Utilization, Hallucination Rate | 80%, 70%, 90%, <5% |
+| **Secondary** | Latency P50/P95, Token Cost, Error Rate | <2s/<5s, <$0.01, <1% |
+| **Diagnostic** | Hit Rate, Memory Age | — |
 
 ---
 
@@ -865,49 +849,11 @@ async function macroSecurityChecks(): Promise<void> {
 
 ---
 
-## Полный список автоматизируемых метрик (от Codex)
+## Полный список метрик
 
-### Retrieval
-
-| Метрика | Формула | Автоматизация |
-|---------|---------|---------------|
-| Hit Rate | `memories_found > 0 / total` | Автоматически |
-| Precision@K | `relevant / retrieved` | LLM-judge |
-| MRR | `1/rank_of_first_relevant` | Golden dataset |
-| No-context rate | `memories_found == 0 / total` | Автоматически |
-
-### Response Quality
-
-| Метрика | Как измерять | Автоматизация |
-|---------|--------------|---------------|
-| Context utilized | LLM-judge | Автоматически |
-| Fact consistency | Compare response vs LSM | LLM-judge |
-| Hallucination | Check claims vs known facts | LLM-judge |
-| Style match | Compare to user profile | Future (нужен профиль) |
-
-### Производительность
-
-| Метрика | Как измерять | Target |
-|---------|--------------|--------|
-| E2E latency P50 | `completed_at - created_at` | < 2s |
-| E2E latency P95 | Percentile | < 5s |
-| Stage latency | Per-stage timestamps | Analyzer < 500ms |
-| Token cost | OpenAI usage | < $0.01/req |
-
-### Надёжность
-
-| Метрика | Как измерять | Target |
-|---------|--------------|--------|
-| Retry rate | `retries > 0 / total` | < 5% |
-| Error rate | `FAILED / total` | < 1% |
-| Reconnect count | LISTEN reconnects | < 1/hour |
-
-### Изоляция
-
-| Метрика | Как измерять | Target |
-|---------|--------------|--------|
-| Tenant leak | Cross-user memory access | **= 0** |
-| RLS violations | Security audit | **= 0** |
+> См. [METRICS.md](./METRICS.md) — source of truth для всех метрик.
+>
+> Там описаны: формулы SQL, артефакты для хранения, targets, симптомы проблем, команды для агента.
 
 ---
 
@@ -992,6 +938,7 @@ Deep-cycle:
 
 ## Связанные файлы
 
+- [METRICS.md](./METRICS.md) — **метрики системы** (формулы, targets, команды для агента)
 - [IMPACTS.md](./IMPACTS.md) — **импакт-факторы системы** (артефакты, механизмы влияния, команды для агента)
 - [IDEAS.md](./IDEAS.md) — идеи для улучшения (input для экспериментов)
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — текущая архитектура
