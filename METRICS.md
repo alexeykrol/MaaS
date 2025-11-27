@@ -13,6 +13,35 @@
 
 ---
 
+## 0.1. Архитектура сбора метрик
+
+MaaS не знает о системе самообучения. Сбор метрик происходит через **Sensor**:
+
+```
+MaaS (pipeline_runs, raw_logs, lsm_storage)
+        │
+        │ Sensor читает (SELECT)
+        ▼
+   sensor_events (таблица Self-Learning)
+        │
+        │ Teacher читает
+        ▼
+   Анализ, LLM-judge, эксперименты
+```
+
+**Sensor** — код, который:
+- Подписан на события MaaS (по `pipeline_runs`)
+- Читает данные из таблиц MaaS
+- Вычисляет базовые метрики (latency, token_count, memories_found)
+- Пишет в `sensor_events`
+
+**Teacher** — код + LLM, который:
+- Читает из `sensor_events`
+- Запускает LLM-judge для качественных оценок (precision, hallucination)
+- Записывает результаты оценок обратно в `sensor_events`
+
+---
+
 ## 1. Список метрик по приоритету
 
 **Primary (цели оптимизации):**
@@ -32,16 +61,15 @@
 
 ---
 
-## 1.1. Вспомогательные артефакты
+## 1.1. Артефакты
 
-Метрики зависят от следующих артефактов, которые должны существовать:
-
-| Артефакт | Тип | Путь/Расположение | Назначение |
-|----------|-----|-------------------|------------|
-| `telemetry_events` | Таблица БД | `db/schema.sql` | Хранение всех метрик |
-| `pipeline_runs` | Таблица БД | `db/schema.sql` | Статусы и timestamps |
-| `test_dialogs` | Таблица БД | `db/schema.sql` | Golden dataset для recall |
-| LLM-judge промпты | Файл/секция | `SELFLEARN.md`, секция "LLM-Judge Prompts" | Оценка качества |
+| Артефакт | Тип | Кто использует | Назначение |
+|----------|-----|----------------|------------|
+| `pipeline_runs` | Таблица MaaS | Sensor читает | Статусы, timestamps |
+| `raw_logs` | Таблица MaaS | Sensor читает | Запросы, ответы, токены |
+| `lsm_storage` | Таблица MaaS | Sensor читает | Найденные memories |
+| `sensor_events` | Таблица Self-Learning | Sensor пишет, Teacher читает | Хранение метрик |
+| LLM-judge | Модуль Teacher | Teacher вызывает | Оценка качества |
 
 ---
 
@@ -66,20 +94,24 @@
 
 **Тип:** Primary
 
-**Артефакт данных:**
-- Таблица: `telemetry_events`
-- Поле: `retrieval_relevant` (boolean)
+**Источник данных (MaaS):**
+- `pipeline_runs.analysis_result` — какие memories были найдены
+- `pipeline_runs.user_query` — исходный запрос
 
-**Артефакт логики:**
-- Модуль LLM-judge: `[NEW] src/utils/llmJudge.ts`
-- Вызывается после Assembler, записывает результат в `telemetry_events`
+**Хранение (Self-Learning):**
+- Таблица: `sensor_events`
+- Поле: `retrieval_relevant` (boolean) — заполняется Teacher через LLM-judge
+
+**Кто вычисляет:**
+- Sensor: записывает `pipeline_run_id`, `memories_found`
+- Teacher: вызывает LLM-judge, записывает `retrieval_relevant`
 
 **Формула:**
 ```sql
 SELECT
   COUNT(*) FILTER (WHERE retrieval_relevant = true) * 100.0 /
   COUNT(*) FILTER (WHERE memories_found > 0)
-FROM telemetry_events
+FROM sensor_events
 WHERE created_at > NOW() - INTERVAL '1 day';
 ```
 
@@ -93,33 +125,37 @@ WHERE created_at > NOW() - INTERVAL '1 day';
 - Секция 4: `top_k` — уменьшить для повышения precision
 - Секция 1: `Retrieval Strategy` — добавить reranker
 
-**Команды для агента:**
-1. Артефакт данных: «Добавь поле `retrieval_relevant BOOLEAN` в таблицу `telemetry_events`.»
-2. Артефакт логики: «Создай `src/utils/llmJudge.ts` с функцией `judgeRetrievalRelevance(query, memories)`. Используй промпт из SELFLEARN.md секция "LLM-Judge Prompts".»
-3. Связка: «После Assembler вызови `judgeRetrievalRelevance()` и запиши результат в `telemetry_events`.»
-
 ---
 
 ### 2.2. Retrieval Recall
 
 **Тип:** Primary
 
-**Артефакт данных:**
-- Таблица: `test_dialogs` (Golden dataset)
-  - Поле: `expected_memory_ids UUID[]` — какие memories должны быть найдены
-- Таблица: `[NEW] test_evaluation_results`
-  - Поля: `test_id`, `found_relevant INT`, `expected_relevant INT`
+**Источник данных (MaaS):**
+- `pipeline_runs.analysis_result` — какие memories были найдены
 
-**Артефакт логики:**
-- Модуль: `[NEW] src/test-runner/evaluator.ts`
-- Запускается в macro-cycle, сравнивает найденные memories с expected
+**Источник данных (Self-Learning):**
+- User Emulator генерирует диалоги с `expected_memory_ids`
+
+**Хранение (Self-Learning):**
+- Таблица: `sensor_events`
+- Поля: `expected_memory_ids UUID[]`, `found_memory_ids UUID[]`
+
+**Кто вычисляет:**
+- User Emulator: при генерации диалога указывает `expected_memory_ids`
+- Sensor: записывает `found_memory_ids` из `pipeline_runs`
+- Teacher: вычисляет recall = found ∩ expected / expected
 
 **Формула:**
 ```sql
 SELECT
-  AVG(found_relevant::float / expected_relevant::float) * 100
-FROM test_evaluation_results
-WHERE created_at > NOW() - INTERVAL '1 day';
+  AVG(
+    array_length(found_memory_ids & expected_memory_ids, 1)::float /
+    array_length(expected_memory_ids, 1)::float
+  ) * 100
+FROM sensor_events
+WHERE expected_memory_ids IS NOT NULL
+  AND created_at > NOW() - INTERVAL '1 day';
 ```
 
 **Target:** > 70%
@@ -133,31 +169,30 @@ WHERE created_at > NOW() - INTERVAL '1 day';
 - Секция 2: `Keyword Extraction` — улучшить извлечение ключей
 - Секция 3: `Archivist Tagging` — улучшить теги при записи
 
-**Команды для агента:**
-1. Артефакт данных: «Добавь поле `expected_memory_ids UUID[]` в таблицу `test_dialogs`.»
-2. Артефакт данных: «Создай таблицу `test_evaluation_results (id, test_id, found_relevant, expected_relevant, created_at)`.»
-3. Артефакт логики: «Создай `src/test-runner/evaluator.ts` с функцией `evaluateRecall(testDialog)` — сравнивает найденные memories с expected_memory_ids.»
-
 ---
 
 ### 2.3. Context Utilization
 
 **Тип:** Primary
 
-**Артефакт данных:**
-- Таблица: `telemetry_events`
-- Поле: `context_utilized` (boolean)
+**Источник данных (MaaS):**
+- `pipeline_runs.final_context_payload` — контекст, переданный LLM
+- `pipeline_runs.final_answer` — ответ LLM
 
-**Артефакт логики:**
-- Модуль LLM-judge: `[NEW] src/utils/llmJudge.ts`
-- Функция: `judgeContextUtilization(context, query, response)`
+**Хранение (Self-Learning):**
+- Таблица: `sensor_events`
+- Поле: `context_utilized` (boolean) — заполняется Teacher через LLM-judge
+
+**Кто вычисляет:**
+- Sensor: записывает `context_payload`, `final_answer`
+- Teacher: вызывает LLM-judge, записывает `context_utilized`
 
 **Формула:**
 ```sql
 SELECT
   COUNT(*) FILTER (WHERE context_utilized = true) * 100.0 /
   COUNT(*) FILTER (WHERE memories_found > 0)
-FROM telemetry_events;
+FROM sensor_events;
 ```
 
 **Target:** > 90%
@@ -170,31 +205,30 @@ FROM telemetry_events;
 - Секция 5: `Responder System Prompt` — усилить инструкцию использовать контекст
 - Секция 8: `Max Context Tokens` — проверить, что контекст не обрезается
 
-**Команды для агента:**
-1. Артефакт данных: «Добавь поле `context_utilized BOOLEAN` в `telemetry_events`.»
-2. Артефакт логики: «В `src/utils/llmJudge.ts` добавь функцию `judgeContextUtilization(context, query, response)`. Промпт из SELFLEARN.md.»
-3. Импакт-фактор: «В `responder_system_prompt` (секция 5 IMPACTS.md) добавь правило: ВСЕГДА опираться на CONTEXT при ответе о пользователе.»
-
 ---
 
 ### 2.4. Hallucination Rate
 
 **Тип:** Primary
 
-**Артефакт данных:**
-- Таблица: `telemetry_events`
-- Поле: `hallucination_detected` (boolean)
+**Источник данных (MaaS):**
+- `pipeline_runs.final_context_payload` — контекст
+- `pipeline_runs.final_answer` — ответ LLM
 
-**Артефакт логики:**
-- Модуль LLM-judge: `[NEW] src/utils/llmJudge.ts`
-- Функция: `detectHallucination(context, response)`
+**Хранение (Self-Learning):**
+- Таблица: `sensor_events`
+- Поле: `hallucination_detected` (boolean) — заполняется Teacher через LLM-judge
+
+**Кто вычисляет:**
+- Sensor: записывает `context_payload`, `final_answer`
+- Teacher: вызывает LLM-judge, записывает `hallucination_detected`
 
 **Формула:**
 ```sql
 SELECT
   COUNT(*) FILTER (WHERE hallucination_detected = true) * 100.0 /
   COUNT(*)
-FROM telemetry_events;
+FROM sensor_events;
 ```
 
 **Target:** < 5%
@@ -207,37 +241,29 @@ FROM telemetry_events;
 - Секция 5: `Responder System Prompt` — добавить запрет на выдумывание
 - Секция 9: `Temperature` — снизить для уменьшения креативности
 
-**Команды для агента:**
-1. Артефакт данных: «Добавь поле `hallucination_detected BOOLEAN` в `telemetry_events`.»
-2. Артефакт логики: «В `src/utils/llmJudge.ts` добавь `detectHallucination(context, response)`. Промпт из SELFLEARN.md секция "Hallucination Detection Judge".»
-3. Импакт-фактор: «В `responder_system_prompt` добавь: НИКОГДА не утверждать факты о пользователе, которых нет в CONTEXT.»
-
 ---
 
 ### 2.5. Latency P50/P95
 
 **Тип:** Secondary
 
-**Артефакт данных:**
-- Таблица: `pipeline_runs`
-- Поля: `created_at`, `updated_at` (уже существуют)
+**Источник данных (MaaS):**
+- `pipeline_runs.created_at`, `updated_at` — timestamps (уже существуют)
 
-**Артефакт логики:**
-- Существующий pipeline автоматически записывает timestamps
-- Дополнительно: `[NEW] telemetry_events.latency_ms` для per-stage timing
+**Хранение (Self-Learning):**
+- Таблица: `sensor_events`
+- Поле: `latency_ms INTEGER`
+
+**Кто вычисляет:**
+- Sensor: читает timestamps из `pipeline_runs`, вычисляет `latency_ms = updated_at - created_at`
 
 **Формула:**
 ```sql
 SELECT
-  PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY
-    EXTRACT(EPOCH FROM (updated_at - created_at)) * 1000
-  ) AS p50_ms,
-  PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY
-    EXTRACT(EPOCH FROM (updated_at - created_at)) * 1000
-  ) AS p95_ms
-FROM pipeline_runs
-WHERE status = 'COMPLETED'
-  AND created_at > NOW() - INTERVAL '1 hour';
+  PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY latency_ms) AS p50_ms,
+  PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms) AS p95_ms
+FROM sensor_events
+WHERE created_at > NOW() - INTERVAL '1 hour';
 ```
 
 **Target:** P50 < 2000ms, P95 < 5000ms
@@ -250,30 +276,29 @@ WHERE status = 'COMPLETED'
 - Секция 6: `LLM Model` — использовать mini для простых запросов
 - Секция 8: `Max Context Tokens` — уменьшить размер контекста
 
-**Команды для агента:**
-1. Артефакт данных: «Добавь поля `stage VARCHAR(50)`, `latency_ms INTEGER` в `telemetry_events`.»
-2. Артефакт логики: «В каждом агенте (`analyzer.ts`, `assembler.ts`, `finalResponder.ts`) замеряй время выполнения и записывай в `telemetry_events`.»
-
 ---
 
 ### 2.6. Token Cost
 
 **Тип:** Secondary
 
-**Артефакт данных:**
-- Таблица: `telemetry_events`
+**Источник данных (MaaS):**
+- `raw_logs` — содержит информацию о LLM вызовах
+- Либо нужно добавить поле в `pipeline_runs` для хранения usage
+
+**Хранение (Self-Learning):**
+- Таблица: `sensor_events`
 - Поля: `prompt_tokens INT`, `completion_tokens INT`, `total_cost_usd NUMERIC(10,6)`
 
-**Артефакт логики:**
-- Модуль: `src/utils/openai.ts`
-- После каждого вызова OpenAI записывать usage в телеметрию
+**Кто вычисляет:**
+- Sensor: читает token usage из MaaS, вычисляет cost по формуле
 
 **Формула:**
 ```sql
 SELECT
   AVG(total_cost_usd) AS avg_cost_per_request,
   SUM(total_cost_usd) AS total_daily_cost
-FROM telemetry_events
+FROM sensor_events
 WHERE created_at > NOW() - INTERVAL '1 day';
 ```
 
@@ -287,28 +312,27 @@ WHERE created_at > NOW() - INTERVAL '1 day';
 - Секция 6: `LLM Model` — mini вместо 4o для простых запросов
 - Секция 8: `Max Context Tokens` — ограничить размер контекста
 
-**Команды для агента:**
-1. Артефакт данных: «Добавь поля `prompt_tokens`, `completion_tokens`, `total_cost_usd` в `telemetry_events`.»
-2. Артефакт логики: «В `src/utils/openai.ts` после вызова извлеки `response.usage` и вычисли cost: `prompt_tokens * 0.15/1M + completion_tokens * 0.60/1M` для mini.»
-
 ---
 
 ### 2.7. Error Rate
 
 **Тип:** Secondary
 
-**Артефакт данных:**
-- Таблица: `pipeline_runs`
-- Поле: `status` (уже существует)
+**Источник данных (MaaS):**
+- `pipeline_runs.status` — уже существует (COMPLETED / FAILED)
 
-**Артефакт логики:**
-- Существующий Orchestrator автоматически помечает FAILED
+**Хранение (Self-Learning):**
+- Таблица: `sensor_events`
+- Поле: `is_error BOOLEAN`
+
+**Кто вычисляет:**
+- Sensor: читает `status` из `pipeline_runs`, записывает `is_error = (status = 'FAILED')`
 
 **Формула:**
 ```sql
 SELECT
-  COUNT(*) FILTER (WHERE status = 'FAILED') * 100.0 / COUNT(*)
-FROM pipeline_runs
+  COUNT(*) FILTER (WHERE is_error = true) * 100.0 / COUNT(*)
+FROM sensor_events
 WHERE created_at > NOW() - INTERVAL '1 hour';
 ```
 
@@ -321,29 +345,27 @@ WHERE created_at > NOW() - INTERVAL '1 hour';
 **Связанные импакт-факторы (см. IMPACTS.md):**
 - Retry logic: `src/orchestrator/index.ts`, функция `withRetry()`
 
-**Команды для агента:**
-1. Диагностика: «Выполни `SELECT id, error_message, created_at FROM pipeline_runs WHERE status = 'FAILED' ORDER BY created_at DESC LIMIT 10`. Найди паттерн ошибок.»
-2. Исправление: «По error_message определи проблемный агент и исправь.»
-
 ---
 
 ### 2.8. Hit Rate
 
 **Тип:** Diagnostic (без жёсткого target)
 
-**Артефакт данных:**
-- Таблица: `telemetry_events`
+**Источник данных (MaaS):**
+- `pipeline_runs.analysis_result` — содержит найденные memories
+
+**Хранение (Self-Learning):**
+- Таблица: `sensor_events`
 - Поле: `memories_found INTEGER`
 
-**Артефакт логики:**
-- Модуль: `src/agents/assembler.ts`
-- После retrieval записывает количество найденных memories
+**Кто вычисляет:**
+- Sensor: читает `analysis_result` из `pipeline_runs`, считает количество memories
 
 **Формула:**
 ```sql
 SELECT
   COUNT(*) FILTER (WHERE memories_found > 0) * 100.0 / COUNT(*)
-FROM telemetry_events;
+FROM sensor_events;
 ```
 
 **Target:** — (диагностическая, ориентир > 80% для персональных вопросов)
@@ -352,28 +374,27 @@ FROM telemetry_events;
 - Низкий hit rate при наличии релевантной памяти = проблема retrieval
 - Высокий hit rate при плохом precision = поднимается мусор
 
-**Команды для агента:**
-1. Артефакт данных: «Добавь поле `memories_found INTEGER` в `telemetry_events`.»
-2. Артефакт логики: «В `src/agents/assembler.ts` после retrieval запиши `memories.length` в телеметрию.»
-
 ---
 
 ### 2.9. Memory Age at Retrieval
 
 **Тип:** Diagnostic (без target)
 
-**Артефакт данных:**
-- Таблица: `telemetry_events`
+**Источник данных (MaaS):**
+- `pipeline_runs.analysis_result` — ID найденных memories
+- `lsm_storage.created_at` — дата создания каждой memory
+
+**Хранение (Self-Learning):**
+- Таблица: `sensor_events`
 - Поле: `avg_memory_age_days NUMERIC`
 
-**Артефакт логики:**
-- Модуль: `src/agents/assembler.ts`
-- При retrieval вычисляет средний возраст найденных memories
+**Кто вычисляет:**
+- Sensor: читает memory IDs из `pipeline_runs`, джойнит с `lsm_storage`, вычисляет средний возраст
 
 **Формула:**
 ```sql
 SELECT AVG(avg_memory_age_days)
-FROM telemetry_events
+FROM sensor_events
 WHERE memories_found > 0;
 ```
 
@@ -385,10 +406,6 @@ WHERE memories_found > 0;
 
 **Связанные импакт-факторы (см. IMPACTS.md):**
 - Секция 7: `Relevance/Recency Weights` — баланс свежести и релевантности
-
-**Команды для агента:**
-1. Артефакт данных: «Добавь поле `avg_memory_age_days NUMERIC` в `telemetry_events`.»
-2. Артефакт логики: «В `src/agents/assembler.ts` вычисли: `AVG(NOW() - memory.created_at)` в днях, запиши в телеметрию.»
 
 ---
 
@@ -408,20 +425,41 @@ WHERE memories_found > 0;
 
 ---
 
-## 4. Чеклист для реализации телеметрии
+## 4. Схема таблицы sensor_events
 
-**Шаг 1: Создать/обновить таблицу telemetry_events**
-- Артефакт: `db/migrations/003_telemetry.sql`
-- Команда: «Создай миграцию с полями из SELFLEARN.md секция "Telemetry Storage Schema".»
+```sql
+CREATE TABLE sensor_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  pipeline_run_id UUID NOT NULL,
 
-**Шаг 2: Добавить запись базовых метрик**
-- Артефакт: `src/agents/*.ts`
-- Команда: «В каждом агенте после выполнения добавь INSERT в `telemetry_events` с: `pipeline_id`, `stage`, `latency_ms`, `memories_found`.»
+  -- Базовые метрики (Sensor записывает)
+  latency_ms INTEGER,
+  memories_found INTEGER,
+  found_memory_ids UUID[],
+  prompt_tokens INTEGER,
+  completion_tokens INTEGER,
+  total_cost_usd NUMERIC(10,6),
+  is_error BOOLEAN DEFAULT false,
+  avg_memory_age_days NUMERIC,
 
-**Шаг 3: Создать модуль LLM-judge**
-- Артефакт: `[NEW] src/utils/llmJudge.ts`
-- Команда: «Создай модуль с функциями: `judgeRetrievalRelevance()`, `judgeContextUtilization()`, `detectHallucination()`. Промпты из SELFLEARN.md секция "LLM-Judge Prompts".»
+  -- LLM-judge метрики (Teacher записывает)
+  retrieval_relevant BOOLEAN,
+  context_utilized BOOLEAN,
+  hallucination_detected BOOLEAN,
 
-**Шаг 4: Добавить endpoint метрик**
-- Артефакт: `[NEW] src/server.ts` endpoint `/api/metrics`
-- Команда: «Добавь GET `/api/metrics` который выполняет SQL из секции 2 и возвращает JSON со всеми метриками.»
+  -- Для recall (User Emulator задаёт)
+  expected_memory_ids UUID[],
+
+  -- Метаданные
+  source VARCHAR(50), -- 'emulator' | 'real_user'
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+## 5. Кто что записывает
+
+| Компонент | Поля в sensor_events |
+|-----------|---------------------|
+| **Sensor** | `pipeline_run_id`, `latency_ms`, `memories_found`, `found_memory_ids`, `prompt_tokens`, `completion_tokens`, `total_cost_usd`, `is_error`, `avg_memory_age_days`, `source` |
+| **User Emulator** | `expected_memory_ids` (при генерации диалога) |
+| **Teacher** | `retrieval_relevant`, `context_utilized`, `hallucination_detected` (через LLM-judge) |
