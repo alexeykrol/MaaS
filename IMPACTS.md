@@ -31,38 +31,77 @@ Self-Learning (анализ метрик)
         │
         │ Teacher формирует рекомендации
         ▼
-   experiment_parameters (версионирование)
+   experiment_parameters (версионирование в Self-Learning)
         │
         │ Tuner активирует версию
         ▼
    Таблицы MaaS (прямая запись)
-   ├── system_prompts (промпты агентов)
-   ├── config файлы (параметры retrieval, scoring)
-   └── код агентов (inline конфиги)
+   ├── impact_values (числовые параметры)
+   └── system_prompts (промпты агентов)
 ```
 
 **Tuner** — код, который:
-- Хранит версии параметров в `experiment_parameters`
-- При активации версии записывает значения НАПРЯМУЮ в таблицы/конфиги MaaS
+- Хранит версии параметров в `experiment_parameters` (Self-Learning)
+- При активации версии записывает значения НАПРЯМУЮ в таблицы MaaS
 - Это как «веса» для модели — результат обучения записывается в систему
 
-**Важно:** MaaS ничего не читает из `experiment_parameters`. Tuner сам записывает оптимизированные значения в нужные места MaaS.
+**Важно:** MaaS ничего не читает из `experiment_parameters`. Tuner сам записывает оптимизированные значения в таблицы MaaS (`impact_values`, `system_prompts`).
 
 ---
 
-## 0.2. Целевые артефакты MaaS
+## 0.2. Таблица impact_values (MaaS)
 
-| Импакт-фактор | Куда Tuner записывает |
-|---------------|----------------------|
-| Retrieval Strategy | `src/agents/assembler.ts` (config объект) |
-| Keyword Extraction | `system_prompts` (prompt_type = 'analyzer') |
-| Archivist Tagging | `system_prompts` (prompt_type = 'archivist') |
-| top_k, пороги | `src/agents/assembler.ts` (RETRIEVAL_CONFIG) |
-| Responder System Prompt | `system_prompts` (prompt_type = 'responder') |
-| LLM Model Selection | `.env` или `src/utils/llm.ts` (model config) |
-| Relevance/Recency Weights | `src/agents/assembler.ts` (SCORING_CONFIG) |
-| Max Context Tokens | `src/agents/assembler.ts` (CONTEXT_BUDGET) |
-| Temperature | `src/agents/responder.ts` (generation config) |
+Все числовые/строковые параметры хранятся в одной таблице:
+
+```sql
+CREATE TABLE impact_values (
+  key VARCHAR(50) PRIMARY KEY,
+  value JSONB NOT NULL,
+  description TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### Список ключей
+
+| Ключ | Тип | Описание | Секция |
+|------|-----|----------|--------|
+| `retrieval_strategy` | string | 'tags' / 'semantic' / 'hybrid' | §1 |
+| `use_semantic_search` | boolean | включить семантический поиск | §1 |
+| `top_k` | integer | количество memories | §4 |
+| `min_score` | float | минимальный порог релевантности | §4 |
+| `relevance_weight` | float | вес релевантности (0-1) | §7 |
+| `recency_weight` | float | вес свежести (0-1) | §7 |
+| `max_context_tokens` | integer | лимит токенов контекста | §8 |
+| `llm_model_default` | string | модель по умолчанию | §6 |
+| `llm_model_complex` | string | модель для сложных запросов | §6 |
+| `temperature` | float | temperature для responder | §9 |
+
+### Промпты (таблица system_prompts)
+
+| prompt_type | Описание | Секция |
+|-------------|----------|--------|
+| `analyzer` | Промпт для извлечения ключевых слов | §2 |
+| `archivist` | Промпт для генерации тегов | §3 |
+| `responder` | Промпт для финального ответа | §5 |
+
+### Как MaaS читает параметры
+
+```typescript
+// src/utils/config.ts
+async function getImpact(key: string): Promise<any> {
+  const { data } = await supabase
+    .from('impact_values')
+    .select('value')
+    .eq('key', key)
+    .single();
+  return data?.value;
+}
+
+// Использование в агентах:
+const topK = await getImpact('top_k');  // 3
+const strategy = await getImpact('retrieval_strategy');  // 'hybrid'
+```
 
 Ниже — перечень импакт-факторов **в порядке убывания влияния на качество**.
 
@@ -110,19 +149,15 @@ Retrieval Strategy определяет **список кандидатов-во
 
 ### 1.4. Целевой артефакт MaaS (куда Tuner записывает)
 
-**Файл:** `src/agents/assembler.ts`
-**Объект:** `RETRIEVAL_CONFIG`
+**Таблица:** `impact_values`
+**Ключи:** `retrieval_strategy`, `use_semantic_search`
 
-```typescript
-const RETRIEVAL_CONFIG = {
-  strategy: 'hybrid',        // 'tags' | 'semantic' | 'hybrid'
-  useSemanticSearch: true,
-  tagMatchFields: ['semantic_tags'],
-  rankingFields: ['relevance', 'recency']
-};
+```sql
+UPDATE impact_values SET value = '"hybrid"' WHERE key = 'retrieval_strategy';
+UPDATE impact_values SET value = 'true' WHERE key = 'use_semantic_search';
 ```
 
-**Tuner записывает:** UPDATE значений в этом объекте или через environment variables.
+**Tuner записывает:** UPDATE значений в таблице `impact_values`.
 
 ### 1.5. Примеры конкретных изменений
 
@@ -285,21 +320,15 @@ WHERE prompt_type = 'archivist' AND is_active = true;
 
 ### 4.4. Целевой артефакт MaaS (куда Tuner записывает)
 
-**Файл:** `src/agents/assembler.ts`
-**Объект:** `RETRIEVAL_CONFIG`
+**Таблица:** `impact_values`
+**Ключи:** `top_k`, `min_score`
 
-```typescript
-const RETRIEVAL_CONFIG = {
-  topK: 3,                    // количество memories
-  minScore: 0.5,              // минимальный порог релевантности
-  dynamicTopK: {              // опционально: динамический top_k
-    highScore: { threshold: 0.8, topK: 2 },
-    lowScore: { threshold: 0.5, topK: 5 }
-  }
-};
+```sql
+UPDATE impact_values SET value = '3' WHERE key = 'top_k';
+UPDATE impact_values SET value = '0.5' WHERE key = 'min_score';
 ```
 
-**Tuner записывает:** UPDATE значений `topK`, `minScore` в конфиге.
+**Tuner записывает:** UPDATE значений в таблице `impact_values`.
 
 ### 4.5. Конкретные изменения
 
@@ -408,21 +437,15 @@ WHERE prompt_type = 'responder' AND is_active = true;
 
 ### 6.4. Целевой артефакт MaaS (куда Tuner записывает)
 
-**Файл:** `src/utils/llm.ts` или `.env`
-**Объект:** `LLM_CONFIG`
+**Таблица:** `impact_values`
+**Ключи:** `llm_model_default`, `llm_model_complex`
 
-```typescript
-const LLM_CONFIG = {
-  defaultModel: 'gpt-4o-mini',
-  complexModel: 'gpt-4o',
-  routingRules: {
-    useComplexWhen: ['analyze', 'compare', 'strategy'],
-    contextThreshold: 2000  // tokens
-  }
-};
+```sql
+UPDATE impact_values SET value = '"gpt-4o-mini"' WHERE key = 'llm_model_default';
+UPDATE impact_values SET value = '"gpt-4o"' WHERE key = 'llm_model_complex';
 ```
 
-**Tuner записывает:** UPDATE значений моделей и правил маршрутизации.
+**Tuner записывает:** UPDATE значений в таблице `impact_values`.
 
 ### 6.5. Конкретные изменения
 
@@ -464,21 +487,15 @@ const LLM_CONFIG = {
 
 ### 7.4. Целевой артефакт MaaS (куда Tuner записывает)
 
-**Файл:** `src/agents/assembler.ts`
-**Объект:** `SCORING_CONFIG`
+**Таблица:** `impact_values`
+**Ключи:** `relevance_weight`, `recency_weight`
 
-```typescript
-const SCORING_CONFIG = {
-  relevanceWeight: 0.7,
-  recencyWeight: 0.3,
-  profiles: {
-    facts: { relevance: 0.9, recency: 0.1 },
-    recent: { relevance: 0.5, recency: 0.5 }
-  }
-};
+```sql
+UPDATE impact_values SET value = '0.7' WHERE key = 'relevance_weight';
+UPDATE impact_values SET value = '0.3' WHERE key = 'recency_weight';
 ```
 
-**Tuner записывает:** UPDATE значений весов в конфиге.
+**Tuner записывает:** UPDATE значений в таблице `impact_values`.
 
 ### 7.5. Конкретные изменения
 
@@ -524,20 +541,14 @@ const SCORING_CONFIG = {
 
 ### 8.4. Целевой артефакт MaaS (куда Tuner записывает)
 
-**Файл:** `src/agents/assembler.ts`
-**Объект:** `CONTEXT_BUDGET`
+**Таблица:** `impact_values`
+**Ключи:** `max_context_tokens`
 
-```typescript
-const CONTEXT_BUDGET = {
-  totalLimit: 4000,           // общий лимит токенов
-  systemPromptLimit: 500,     // для system prompt
-  dialogLimit: 1000,          // для свежих сообщений
-  memoryLimit: 2000,          // для retrieved memories
-  truncationPriority: ['memory', 'dialog']  // что обрезать первым
-};
+```sql
+UPDATE impact_values SET value = '4000' WHERE key = 'max_context_tokens';
 ```
 
-**Tuner записывает:** UPDATE значений лимитов в конфиге.
+**Tuner записывает:** UPDATE значений в таблице `impact_values`.
 
 ### 8.5. Конкретные изменения
 
@@ -576,18 +587,14 @@ Temperature определяет:
 
 ### 9.4. Целевой артефакт MaaS (куда Tuner записывает)
 
-**Файл:** `src/agents/responder.ts`
-**Объект:** `GENERATION_CONFIG`
+**Таблица:** `impact_values`
+**Ключи:** `temperature`
 
-```typescript
-const GENERATION_CONFIG = {
-  temperature: 0.3,           // для memory-based ответов
-  creativeTemperature: 0.7,   // для креативных задач
-  maxTokens: 1000
-};
+```sql
+UPDATE impact_values SET value = '0.3' WHERE key = 'temperature';
 ```
 
-**Tuner записывает:** UPDATE значения temperature в конфиге агента.
+**Tuner записывает:** UPDATE значений в таблице `impact_values`.
 
 ### 9.5. Конкретные изменения
 
