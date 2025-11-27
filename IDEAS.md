@@ -364,6 +364,42 @@ topic_history: ["meaning of life", "philosophy", "existentialism"]
 
 ---
 
+### 5.4 Externalized Config (impact_values)
+
+**[ПРИОРИТЕТ] [РЕШЕНИЕ]**
+
+> *Добавлено: 2025-11-26*
+
+**Проблема:** Сейчас все параметры (top_k, temperature, weights) hardcoded в коде агентов. Tuner не сможет их менять без модификации исходников.
+
+**Идея:** Вынести все tunable параметры в таблицу `impact_values`:
+
+```sql
+CREATE TABLE impact_values (
+  key VARCHAR(50) PRIMARY KEY,
+  value JSONB NOT NULL,
+  description TEXT,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+**Агенты читают параметры:**
+```typescript
+const topK = await getImpact('top_k');  // вместо const topK = 3;
+```
+
+**Преимущества:**
+- Tuner делает простой `UPDATE` вместо модификации кода
+- Нет пересборки / редеплоя
+- Чистое версионирование (experiment_parameters → impact_values)
+- MaaS остаётся изолированным — просто читает свой конфиг
+
+**Когда делать:** Prerequisite для Step 15 (Tuner). Без этого рефакторинга Tuner будет хрупким.
+
+**См. также:** IMPACTS.md, секция 0.2
+
+---
+
 ## 6. Безопасность и приватность
 
 ### 6.1 Memory Isolation
