@@ -17,16 +17,16 @@
 12. [Шаг 10: Assembler v2 (с LSM)](#шаг-10-assembler-v2-с-lsm)
 13. [Шаг 11: Полировка](#шаг-11-полировка)
 
-### Phase 2: Self-Learning System (Sub-Agent Level)
-14. [Шаг 12: Self-Learning DB Schema](#шаг-12-self-learning-db-schema)
-15. [Шаг 13: Sensor](#шаг-13-sensor)
-16. [Шаг 14: Analyst](#шаг-14-analyst)
-17. [Шаг 15: Teacher](#шаг-15-teacher)
-18. [Шаг 16: Tuner](#шаг-16-tuner)
-19. [Шаг 17: Emulator](#шаг-17-emulator)
-20. [Шаг 18: Manager](#шаг-18-manager)
+### Phase 2A: Self-Learning — Make it Work (минимальные модули)
+14. [Шаг 12: DB Schema + Emulator v0](#шаг-12-db-schema--emulator-v0)
+15. [Шаг 13: Sensor v0 + Analyst v0](#шаг-13-sensor-v0--analyst-v0)
+16. [Шаг 14: Teacher v0 + Tuner v0](#шаг-14-teacher-v0--tuner-v0)
+17. [Шаг 15: Manager v0 (E2E цикл)](#шаг-15-manager-v0-e2e-цикл)
 
-### Phase 3: Agent Level
+### Phase 2B: Self-Learning — Make it Good (качество)
+18. [Шаг 16: LLM-Judge + Golden Dataset](#шаг-16-llm-judge--golden-dataset)
+19. [Шаг 17: Multi-metric Analyst](#шаг-17-multi-metric-analyst)
+20. [Шаг 18: Smart Teacher + Rollback](#шаг-18-smart-teacher--rollback)
 21. [Шаг 19: Agent (Mission Controller)](#шаг-19-agent-mission-controller)
 
 ### Phase 4: Frontend Integration
@@ -1597,281 +1597,386 @@ VITE_SUPABASE_ANON_KEY=eyJ...    # Frontend использует
 
 ---
 
-## Phase 2: Self-Learning System (Sub-Agent Level)
+## Phase 2A: Self-Learning — Make it Work
 
-> **Цель:** MaaS оценивает своё качество и улучшается автоматически.
+> **Цель:** Запустить полный цикл E2E с минимальными модулями.
 >
-> **Prerequisite:** Phase 1 (MVP) завершён ✅
+> **Принцип:** "Make it work, then make it good"
 >
-> **Архитектура:** Двухуровневая система (Agent Level → Sub-Agent Level)
->
-> **Документация:** [docs/selflearn/README.md](./docs/selflearn/README.md)
+> **Критерий успеха Phase 2A:** Один цикл обучения работает от начала до конца.
 
-### Принцип: От простого к сложному
+### Философия Phase 2A
 
 ```
-Шаг 12: DB Schema     ← Фундамент (таблицы)
-Шаг 13: Sensor        ← Сбор данных из MaaS
-Шаг 14: Analyst       ← Анализ данных (метрики, verdict)
-Шаг 15: Teacher       ← Генерация гипотез
-Шаг 16: Tuner         ← Применение изменений
-Шаг 17: Emulator      ← Автоматизация диалогов
-Шаг 18: Manager       ← Оркестрация цикла
----
-Шаг 19: Agent         ← Mission Controller (Phase 3)
+┌─────────────────────────────────────────────────────────────────┐
+│  НЕ нужно на этой фазе:          │  НУЖНО на этой фазе:        │
+│  ─────────────────────           │  ────────────────────        │
+│  • Много метрик                  │  • Одна метрика (hit_rate)   │
+│  • LLM-Judge                     │  • Простой SQL-расчёт        │
+│  • Golden Dataset validation     │  • Любой диалог              │
+│  • Сложные гипотезы              │  • Одна гипотеза             │
+│  • Rollback логика               │  • Просто применить          │
+│  • Approval workflows            │  • Автоматически             │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
+**Результат Phase 2A:** Система запускается, проходит цикл, меняет параметр. Качество неважно — важно что работает.
+
 ---
 
-## Шаг 12: Self-Learning DB Schema
+## Шаг 12: DB Schema + Emulator v0
 
 ### Цель
-Создать таблицы для системы самообучения.
+Создать таблицы и запустить первый диалог через MaaS.
 
 ### Задачи
 
-- [ ] Создать таблицу `sensor_events` — сырые метрики от Sensor
-- [ ] Создать таблицу `analysis_verdicts` — результаты анализа от Analyst
-- [ ] Создать таблицу `hypothesis_history` — история гипотез Teacher
-- [ ] Создать таблицу `impact_values` — текущие значения импактов
-- [ ] Создать таблицу `parameter_history` — история изменений Tuner
-- [ ] Создать seed'ы для тестирования
+#### 12.1 Минимальная схема БД
+- [ ] Создать таблицу `sensor_events` (упрощённая):
+  ```sql
+  CREATE TABLE sensor_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    pipeline_id UUID REFERENCES pipeline_runs(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    memories_found INTEGER,
+    latency_ms INTEGER
+  );
+  ```
+- [ ] Создать таблицу `impact_values`:
+  ```sql
+  CREATE TABLE impact_values (
+    key TEXT PRIMARY KEY,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+  );
+  ```
+- [ ] Seed начальные значения импактов (top_k=5, temperature=0.7)
 
-### Артефакты
-- `db/migrations/selflearn_schema.sql`
-- `db/seeds/selflearn_seeds.sql`
+#### 12.2 Emulator v0 (минимальный)
+- [ ] Создать `src/selflearn/emulator.ts`:
+  ```typescript
+  async function runOneDialog(): Promise<string> {
+    // 1. Сгенерировать простой user_query
+    const query = generateSimpleQuery(); // "Что я люблю есть?"
+
+    // 2. Отправить в MaaS
+    const result = await fetch('/api/inference', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: TEST_USER_ID, query })
+    });
+
+    return result.pipeline_id;
+  }
+  ```
+- [ ] Функция `generateSimpleQuery()` — возвращает случайный вопрос из списка
 
 ### Критерий успеха
-- [ ] Все таблицы созданы в Supabase
-- [ ] Seed данные загружены
-- [ ] Можно делать SELECT/INSERT
+```bash
+# Запустить один диалог
+npm run selflearn:emulate
+# Результат: pipeline_id в консоли, запись в pipeline_runs
+```
 
-### Документация
-- [docs/selflearn/README.md](./docs/selflearn/README.md#артефакты)
+### Артефакты
+- `db/migrations/selflearn_v0.sql`
+- `src/selflearn/emulator.ts`
 
 ---
 
-## Шаг 13: Sensor
+## Шаг 13: Sensor v0 + Analyst v0
 
 ### Цель
-Читать данные из MaaS и записывать в `sensor_events`.
+Захватить данные из MaaS и посчитать одну метрику.
 
 ### Задачи
 
+#### 13.1 Sensor v0
 - [ ] Создать `src/selflearn/sensor.ts`:
-  - `captureFromPipelineRun(pipelineId)` — читает из pipeline_runs, raw_logs
-  - `recordEvent(event)` — пишет в sensor_events
-- [ ] Записывать метрики: latency, tokens, memories_found, etc.
-- [ ] Триггер после COMPLETED в pipeline_runs
+  ```typescript
+  async function captureEvent(pipelineId: string): Promise<void> {
+    // Читаем из pipeline_runs
+    const run = await db.query('SELECT * FROM pipeline_runs WHERE id = $1', [pipelineId]);
 
-### Независимое тестирование
-```
-1. Запустить MaaS вручную (POST /api/inference)
-2. Проверить sensor_events — должна появиться запись
+    // Считаем memories_found из analysis_result
+    const memoriesFound = run.analysis_result?.memories?.length || 0;
+
+    // Записываем
+    await db.query(
+      'INSERT INTO sensor_events (pipeline_id, memories_found, latency_ms) VALUES ($1, $2, $3)',
+      [pipelineId, memoriesFound, run.latency_ms]
+    );
+  }
+  ```
+- [ ] Интегрировать: вызывать после COMPLETED в Orchestrator
+
+#### 13.2 Analyst v0
+- [ ] Создать `src/selflearn/analyst.ts`:
+  ```typescript
+  async function computeHitRate(batchIds: string[]): Promise<number> {
+    // hit_rate = % диалогов где memories_found > 0
+    const result = await db.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE memories_found > 0) * 100.0 / COUNT(*) as hit_rate
+      FROM sensor_events
+      WHERE pipeline_id = ANY($1)
+    `, [batchIds]);
+
+    return result.rows[0].hit_rate;
+  }
+
+  async function generateVerdict(hitRate: number): Promise<Verdict> {
+    const target = 50; // target hit_rate = 50%
+    return {
+      metric: 'hit_rate',
+      current: hitRate,
+      target: target,
+      gap: target - hitRate,
+      needsTuning: hitRate < target
+    };
+  }
+  ```
+
+### Критерий успеха
+```bash
+# После нескольких диалогов
+npm run selflearn:analyze
+# Результат: { hit_rate: 30, target: 50, gap: 20, needsTuning: true }
 ```
 
 ### Артефакты
 - `src/selflearn/sensor.ts`
-
-### Документация
-- [METRICS.md](./METRICS.md)
+- `src/selflearn/analyst.ts`
 
 ---
 
-## Шаг 14: Analyst
+## Шаг 14: Teacher v0 + Tuner v0
 
 ### Цель
-Вычислять метрики, запускать LLM-judge, формировать verdict.
+Сгенерировать одну гипотезу и применить одно изменение.
 
 ### Задачи
 
-- [ ] Создать `src/selflearn/analyst.ts`:
-  - `computeMetrics(batchId)` — precision, recall, hit_rate
-  - `runLLMJudge(events)` — relevance, hallucination, context_util
-  - `computeGaps(metrics, targets)` — сравнение с целями
-  - `generateVerdict(gaps)` — worst_metric, diagnosis
-- [ ] Записывать verdict в `analysis_verdicts`
+#### 14.1 Teacher v0
+- [ ] Создать `src/selflearn/teacher.ts`:
+  ```typescript
+  function generateHypothesis(verdict: Verdict): Hypothesis {
+    // Простая логика: если hit_rate низкий → увеличить top_k
+    if (verdict.metric === 'hit_rate' && verdict.needsTuning) {
+      return {
+        impact: 'retrieval.top_k',
+        action: 'increase',
+        reason: 'low hit_rate suggests we need more memories'
+      };
+    }
+    return null; // no change needed
+  }
 
-### Независимое тестирование
-```
-1. Seed sensor_events (из Шага 12)
-2. Вызвать Analyst.computeMetrics(batchId)
-3. Проверить verdict в analysis_verdicts
+  function createChangeRequest(hypothesis: Hypothesis, currentValue: number): ChangeRequest {
+    const newValue = hypothesis.action === 'increase'
+      ? currentValue + 1
+      : currentValue - 1;
+
+    return {
+      key: hypothesis.impact,
+      from: currentValue,
+      to: newValue
+    };
+  }
+  ```
+
+#### 14.2 Tuner v0
+- [ ] Создать `src/selflearn/tuner.ts`:
+  ```typescript
+  async function applyChange(change: ChangeRequest): Promise<void> {
+    await db.query(
+      'UPDATE impact_values SET value = $1, updated_at = NOW() WHERE key = $2',
+      [JSON.stringify(change.to), change.key]
+    );
+    console.log(`Applied: ${change.key} ${change.from} → ${change.to}`);
+  }
+
+  async function getCurrentValue(key: string): Promise<any> {
+    const result = await db.query('SELECT value FROM impact_values WHERE key = $1', [key]);
+    return result.rows[0]?.value;
+  }
+  ```
+
+### Критерий успеха
+```bash
+npm run selflearn:teach
+# Результат: hypothesis = { impact: 'top_k', action: 'increase' }
+
+npm run selflearn:tune
+# Результат: top_k: 5 → 6
 ```
 
 ### Артефакты
-- `src/selflearn/analyst.ts`
+- `src/selflearn/teacher.ts`
+- `src/selflearn/tuner.ts`
+
+---
+
+## Шаг 15: Manager v0 (E2E цикл)
+
+### Цель
+Объединить всё в один цикл: Emulate → Analyze → Teach → Tune.
+
+### Задачи
+
+- [ ] Создать `src/selflearn/manager.ts`:
+  ```typescript
+  async function runOneCycle(): Promise<CycleResult> {
+    console.log('=== CYCLE START ===');
+
+    // 1. EMULATE: запустить N диалогов
+    console.log('Step 1: Emulating...');
+    const pipelineIds = [];
+    for (let i = 0; i < 5; i++) {
+      const id = await emulator.runOneDialog();
+      await sensor.captureEvent(id);
+      pipelineIds.push(id);
+    }
+
+    // 2. ANALYZE: посчитать метрику
+    console.log('Step 2: Analyzing...');
+    const hitRate = await analyst.computeHitRate(pipelineIds);
+    const verdict = await analyst.generateVerdict(hitRate);
+    console.log('Verdict:', verdict);
+
+    // 3. TEACH: сгенерировать гипотезу
+    console.log('Step 3: Teaching...');
+    const hypothesis = teacher.generateHypothesis(verdict);
+    if (!hypothesis) {
+      console.log('No tuning needed!');
+      return { status: 'no_change', verdict };
+    }
+
+    // 4. TUNE: применить изменение
+    console.log('Step 4: Tuning...');
+    const currentValue = await tuner.getCurrentValue(hypothesis.impact);
+    const change = teacher.createChangeRequest(hypothesis, currentValue);
+    await tuner.applyChange(change);
+
+    console.log('=== CYCLE COMPLETE ===');
+    return { status: 'changed', verdict, change };
+  }
+  ```
+
+- [ ] Добавить npm script: `"selflearn:cycle": "ts-node src/selflearn/manager.ts"`
+
+### Критерий успеха Phase 2A 🎯
+```bash
+npm run selflearn:cycle
+
+# Вывод:
+# === CYCLE START ===
+# Step 1: Emulating...
+# Step 2: Analyzing...
+# Verdict: { hit_rate: 30, target: 50, needsTuning: true }
+# Step 3: Teaching...
+# Hypothesis: { impact: 'top_k', action: 'increase' }
+# Step 4: Tuning...
+# Applied: top_k 5 → 6
+# === CYCLE COMPLETE ===
+```
+
+**Если это работает — Phase 2A завершена!** 🎉
+
+### Артефакты
+- `src/selflearn/manager.ts`
+- `src/selflearn/index.ts` (экспорты)
+
+---
+
+## Phase 2B: Self-Learning — Make it Good
+
+> **Цель:** Улучшить качество каждого модуля.
+>
+> **Prerequisite:** Phase 2A завершена (один цикл работает E2E)
+>
+> **Принцип:** Теперь добавляем сложность постепенно.
+
+---
+
+## Шаг 16: LLM-Judge + Golden Dataset
+
+### Цель
+Добавить объективную оценку качества через LLM и Golden Dataset.
+
+### Задачи
+
+- [ ] Создать Golden Dataset (20-30 примеров):
+  - Factual Recall: "Какой у меня любимый цвет?"
+  - Preference: "Что я предпочитаю на завтрак?"
+  - Negative: вопросы где память НЕ нужна
+- [ ] Создать `src/selflearn/llmJudge.ts`:
+  - `judgeRelevance(query, memories, response)` → boolean
+  - `detectHallucination(response, context)` → boolean
+- [ ] Интегрировать в Analyst: считать precision, recall
+
+### Артефакты
+- `data/golden_dataset.json`
+- `src/selflearn/llmJudge.ts`
 - `prompts/llm_judge.md`
+
+---
+
+## Шаг 17: Multi-metric Analyst
+
+### Цель
+Расширить Analyst до полноценного анализа.
+
+### Задачи
+
+- [ ] Добавить метрики: precision, recall, hallucination_rate, latency_p95
+- [ ] Добавить таблицу `analysis_verdicts`
+- [ ] Реализовать gap calculation с приоритетами (critical/primary/secondary)
+- [ ] Добавить diagnosis с probable_causes
 
 ### Документация
 - [ANALYST.md](./docs/selflearn/ANALYST.md)
 
 ---
 
-## Шаг 15: Teacher
+## Шаг 18: Smart Teacher + Rollback
 
 ### Цель
-Генерировать гипотезы на основе verdict, формировать change_request.
+Улучшить Teacher и добавить безопасность в Tuner.
 
 ### Задачи
 
-- [ ] Создать `src/selflearn/teacher.ts`:
-  - `generateHypothesis(verdict)` — какой impact менять
-  - `calculateChange(impact, direction)` — новое значение (±20%)
-  - `checkHistory(impact)` — не повторять неудачи
-  - `formatChangeRequest()` — для Tuner
-- [ ] Использовать METRIC_TO_IMPACT mapping из [TEACHER.md](./docs/selflearn/TEACHER.md)
-- [ ] Записывать hypothesis в `hypothesis_history`
-
-### Независимое тестирование
-```
-1. Создать mock verdict (worst_metric: 'precision')
-2. Вызвать Teacher.generateHypothesis(verdict)
-3. Проверить change_request
-```
-
-### Артефакты
-- `src/selflearn/teacher.ts`
+- [ ] Teacher: METRIC_TO_IMPACT mapping из документации
+- [ ] Teacher: история гипотез (не повторять неудачи)
+- [ ] Teacher: ограничение ±20%
+- [ ] Tuner: валидация на Golden перед применением
+- [ ] Tuner: автоматический rollback при деградации
+- [ ] Добавить таблицы: `hypothesis_history`, `parameter_history`
 
 ### Документация
 - [TEACHER.md](./docs/selflearn/TEACHER.md)
-
----
-
-## Шаг 16: Tuner
-
-### Цель
-Безопасно применять изменения параметров с валидацией на Golden.
-
-### Задачи
-
-- [ ] Создать `src/selflearn/tuner.ts`:
-  - `applyChange(changeRequest)` — временно применить
-  - `validateOnGolden()` — проверить на Golden Dataset
-  - `finalizeOrRollback()` — применить или откатить
-- [ ] Ограничения: ±20%, один impact за раз
-- [ ] Записывать в `parameter_history`
-
-### Независимое тестирование
-```
-1. Создать mock change_request (top_k: 5 → 4)
-2. Вызвать Tuner.applyChange(request)
-3. Проверить impact_values
-```
-
-### Артефакты
-- `src/selflearn/tuner.ts`
-
-### Документация
 - [TUNER.md](./docs/selflearn/TUNER.md)
-- [AUTONOMY.md](./docs/selflearn/AUTONOMY.md)
-
----
-
-## Шаг 17: Emulator
-
-### Цель
-Генерировать синтетические диалоги через MaaS.
-
-### Задачи
-
-- [ ] Создать `src/selflearn/emulator.ts`:
-  - `loadScenarios()` — загрузить scenarios (train/validation/golden)
-  - `generateDialog(scenario)` — Student ↔ Teacher agents
-  - `runBatch(count, split)` — запустить N диалогов
-- [ ] Интегрировать с MaaS pipeline
-- [ ] Sensor автоматически захватывает данные
-
-### Независимое тестирование
-```
-1. Вызвать Emulator.runBatch(10, 'train')
-2. Проверить sensor_events — 10 записей
-```
-
-### Артефакты
-- `src/selflearn/emulator.ts`
-- `data/scenarios/train/`
-- `data/scenarios/validation/`
-- `data/scenarios/golden/`
-
-### Документация
-- [USER EMULATOR.md](./docs/selflearn/USER%20EMULATOR.md)
-
----
-
-## Шаг 18: Manager
-
-### Цель
-Координировать цикл: Emulator → Analyst → Teacher → Tuner.
-
-### Задачи
-
-- [ ] Создать `src/selflearn/manager.ts`:
-  - `receiveCampaign(campaign)` — от Agent
-  - `runCycle()` — один цикл обучения
-  - `shouldContinue(gaps)` — проверка targets
-  - `reportToAgent()` — CampaignResult
-- [ ] State machine: EMULATING → ANALYZING → DECIDING → TUNING
-- [ ] Записывать в `cycle_history`
-
-### Независимое тестирование (интеграционный)
-```
-1. Создать mock Campaign (target: precision > 80%)
-2. Вызвать Manager.runCycle()
-3. Проверить полный flow: Emulator → Analyst → Teacher → Tuner
-```
-
-### Артефакты
-- `src/selflearn/manager.ts`
-
-### Документация
-- [MANAGER.md](./docs/selflearn/MANAGER.md)
-
----
-
-## Phase 3: Agent Level
-
-> **Цель:** Стратегический уровень — Mission Controller.
->
-> **Prerequisite:** Phase 2 (Sub-Agent Level) завершён
->
-> **Документация:** [docs/selflearn/AGENT.md](./docs/selflearn/AGENT.md)
 
 ---
 
 ## Шаг 19: Agent (Mission Controller)
 
 ### Цель
-Получать Mission от пользователя, разбивать на Campaigns, управлять approvals.
+Добавить стратегический уровень над Manager.
 
 ### Задачи
 
 - [ ] Создать `src/selflearn/agent.ts`:
-  - `receiveMission(mission)` — от пользователя
-  - `planCampaigns(mission)` — разбить на campaigns
-  - `dispatchCampaign(campaign)` — отправить Manager'у
-  - `handleResult(campaignResult)` — решить next steps
-  - `requestApproval(decision)` — для semi_auto
-- [ ] Таблицы: `missions`, `campaigns`, `agent_decisions`, `approval_requests`
+  - Mission → Campaigns
+  - Multi-campaign координация
+  - Approval workflows (semi_auto)
+- [ ] Таблицы: `missions`, `campaigns`, `agent_decisions`
 - [ ] API endpoints для пользователя
-
-### Независимое тестирование (E2E)
-```
-1. POST /api/selflearn/mission — создать Mission
-2. Agent планирует Campaign
-3. Manager выполняет cycles
-4. Agent формирует отчёт
-```
-
-### Артефакты
-- `src/selflearn/agent.ts`
-- `db/migrations/agent_schema.sql`
 
 ### Документация
 - [AGENT.md](./docs/selflearn/AGENT.md)
 
 ---
 
-**Версия документа**: 5.0 (Two-Level Self-Learning Architecture)
+**Версия документа**: 6.0 (Vertical Slice Approach)
 **Дата**: 2025-11-28
-**Статус**: MVP завершён ✅, Phase 2 (Sub-Agent Level) - следующий этап
+**Статус**: MVP завершён ✅, Phase 2A (Make it Work) - следующий этап
