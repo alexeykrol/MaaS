@@ -27,13 +27,19 @@
 - Step 11: Polish (retry logic + error handling)
 
 ### 🔜 Следующий этап:
-- **Phase 2: Self-Learning System** — Telemetry → Tuner → User Emulator → Teacher → Manager
-- Measurement встроен: Teacher = LLM-Judge, User Emulator = Golden Dataset, Manager = Dashboard
+- **Phase 2: Self-Learning System** — двухуровневая архитектура:
+  - **Agent Level:** Mission Controller (цели, campaigns, approvals)
+  - **Sub-Agent Level:** Manager → Emulator → Analyst → Teacher → Tuner
+
+### 📐 Архитектура Self-Learning:
+```
+Пользователь → AGENT → Campaign → MANAGER → cycle(Emulator→Analyst→Teacher→Tuner) → MaaS
+```
 
 ### 📊 Детали:
-- См. **ROADMAP.md** для приоритетов
-- См. **PROJECT_SNAPSHOT.md** для полного статуса
-- См. **docs/selflearn/** для архитектуры самообучения
+- См. **docs/selflearn/AGENT.md** — стратегический уровень (Mission Controller)
+- См. **docs/selflearn/MANAGER.md** — тактический уровень (Cycle Coordinator)
+- См. **docs/selflearn/README.md** — обзор архитектуры
 
 ---
 
@@ -311,7 +317,18 @@ npm run dev              # Запустить сервер
 | **METRICS.md** | Метрики системы | При работе с телеметрией |
 | **docs/selflearn/** | Система самообучения | При развитии self-learning |
 
+### Self-Learning документы (docs/selflearn/):
+| Файл | Уровень | Назначение |
+|------|---------|------------|
+| **AGENT.md** | Agent | Mission Controller, стратегические решения |
+| **MANAGER.md** | Sub-Agent | Cycle Coordinator, оркестрация |
+| **ANALYST.md** | Sub-Agent | "Что не так?" — метрики, verdict |
+| **TEACHER.md** | Sub-Agent | "Как исправить?" — гипотезы |
+| **TUNER.md** | Sub-Agent | Применение параметров |
+| **USER EMULATOR.md** | Sub-Agent | Генерация диалогов |
+| **README.md** | Overview | Обзор архитектуры |
+
 ---
 
-*Последнее обновление: 2025-11-26*
-*Следующий этап: Phase 2 - Measurement Foundation*
+*Последнее обновление: 2025-11-28*
+*Следующий этап: Phase 2 - Self-Learning System (двухуровневая архитектура)*

@@ -1,6 +1,6 @@
 # PROJECT SNAPSHOT — Текущее состояние проекта
 
-*Последнее обновление: 2025-11-26*
+*Последнее обновление: 2025-11-28*
 
 > **Процесс обновления этого файла:** см. [`PROCESS.md`](./PROCESS.md)
 >
@@ -89,15 +89,17 @@ MaaS2/
 ├── tsconfig.json                  ✅
 ├── docs/
 │   └── selflearn/                 ✅ Self-Learning System docs
-│       ├── README.md              ✅ Meta-document (overview)
+│       ├── README.md              ✅ Overview + two-level architecture
+│       ├── AGENT.md               ✅ Mission Controller (Agent Level)
+│       ├── MANAGER.md             ✅ Cycle Coordinator (Sub-Agent Level)
+│       ├── ANALYST.md             ✅ "Что не так?" — metrics, verdict
+│       ├── TEACHER.md             ✅ "Как исправить?" — hypotheses
+│       ├── TUNER.md               ✅ Parameter management
+│       ├── USER EMULATOR.md       ✅ Dialog generation
 │       ├── CYCLES.md              ✅ Learning cycles (micro/macro/deep)
 │       ├── EXPERIMENTS.md         ✅ A/B testing structure
 │       ├── AUTONOMY.md            ✅ Parameter boundaries
-│       ├── GOLDEN_DATASET.md      ✅ Test structure
-│       ├── MANAGER.md             ✅ Manager role spec
-│       ├── TEACHER.md             ✅ Teacher/Evaluator spec
-│       ├── TUNER.md               ✅ Tuner module spec
-│       ├── USER EMULATOR.md       ✅ User simulation spec
+│       ├── GOLDEN_DATASET.md      ✅ Golden dataset structure
 │       └── Системы и ролей.md     ✅ Roles interaction diagram
 ├── ARCHITECTURE.md                ✅
 ├── BACKLOG.md                     ✅
@@ -291,26 +293,52 @@ Event-Driven AI система с долгосрочной семантичес�
 
 > **Цель:** MaaS оценивает своё качество и улучшается автоматически.
 
-**Ключевое понимание:** Measurement встроен в Self-Learning:
-- **Teacher** = LLM-Judge (оценка качества)
-- **User Emulator** = Golden Dataset generator
-- **Manager** = Metrics Dashboard
+### Архитектура: Два уровня
 
-### Порядок реализации:
+```
+AGENT LEVEL (Mission Controller)
+    │
+    └── Получает Mission от пользователя
+        Разбивает на Campaigns
+        Запрашивает approval
+    │
+    ▼
+SUB-AGENT LEVEL
+    │
+    └── MANAGER (Cycle Coordinator)
+        │
+        └── Emulator → Analyst → Teacher → Tuner → MaaS
+```
 
-| Шаг | Компонент | Что делает |
-|-----|-----------|------------|
-| 12 | Telemetry | Сбор метрик (latency, tokens, hit_rate) |
-| 13 | Tuner | Применение/откат параметров безопасно |
-| 14 | User Emulator | Генерация тестовых диалогов |
-| 15 | Teacher | Оценка качества + гипотезы (LLM-Judge) |
-| 16 | Manager | Координация цикла обучения |
+### Порядок реализации (от простого к сложному):
 
-**Детали:** см. [ROADMAP.md](./ROADMAP.md), [docs/selflearn/README.md](./docs/selflearn/README.md)
+| Фаза | Шаг | Компонент | Что делает | Независимое тестирование |
+|------|-----|-----------|------------|--------------------------|
+| 2.1 | 12 | **DB Schema** | Таблицы для Self-Learning | SQL seed'ы |
+| 2.2 | 13 | **Sensor** | Съём данных из MaaS | Manual MaaS run → sensor_events |
+| 2.3 | 14 | **Analyst** | Метрики, verdict, диагноз | Seed sensor_events → verdict |
+| 2.4 | 15 | **Teacher** | Гипотезы, change_request | Mock verdict → hypothesis |
+| 2.5 | 16 | **Tuner** | Применение параметров | Mock change_request → impact_values |
+| 2.6 | 17 | **Emulator** | Генерация диалогов | Standalone N dialogs |
+| 2.7 | 18 | **Manager** | Оркестрация цикла | Integration test |
+| 2.8 | 19 | **Agent** | Mission Controller | E2E Mission → Results |
+
+**Документация:**
+- [docs/selflearn/AGENT.md](./docs/selflearn/AGENT.md) — Agent Level
+- [docs/selflearn/MANAGER.md](./docs/selflearn/MANAGER.md) — Sub-Agent Level
+- [docs/selflearn/README.md](./docs/selflearn/README.md) — Overview
 
 ---
 
 ## История обновлений
+
+### 2025-11-28 - Two-Level Self-Learning Architecture
+- Создан AGENT.md — Mission Controller (стратегический уровень)
+- Создан ANALYST.md — "Что не так?" (метрики, verdict, диагноз)
+- Обновлён MANAGER.md — Cycle Coordinator (тактический уровень)
+- Обновлён TEACHER.md — "Как исправить?" (гипотезы, change_request)
+- Обновлён README.md — новая двухуровневая архитектура
+- Определена последовательность реализации: DB → Sensor → Analyst → Teacher → Tuner → Emulator → Manager → Agent
 
 ### 2025-11-26 - Self-Learning Documentation
 - Создана директория `docs/selflearn/` с полной документацией системы самообучения
