@@ -177,6 +177,94 @@ Manager
 
 ---
 
+## 0.4. Правило внешней валидации (Goodhart Protection)
+
+> **Проблема Goodhart:** "Когда мера становится целью, она перестаёт быть хорошей мерой."
+
+Без внешнего якоря система может оптимизировать метрики, не улучшая реальное качество памяти.
+
+### Обязательное правило
+
+```
+⚠️ ЛЮБОЕ изменение impact factors считается успешным ТОЛЬКО если:
+
+1. Метрики на Golden Dataset улучшились или не ухудшились
+2. Golden Dataset НЕ используется в эмуляции — только для валидации
+3. Если golden metrics ухудшились на > 5% → автоматический rollback
+```
+
+### Golden Dataset как внешний якорь
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    LEARNING CYCLE                                │
+│                                                                  │
+│   Emulated Dialogues (train)        Golden Dataset (test)        │
+│   ┌─────────────────────┐          ┌─────────────────────┐      │
+│   │ Генерируются        │          │ Фиксированный набор │      │
+│   │ эмулятором          │          │ НЕ меняется         │      │
+│   │ Используются для    │          │ НЕ используется в   │      │
+│   │ обучения            │          │ обучении            │      │
+│   └──────────┬──────────┘          └──────────┬──────────┘      │
+│              │                                 │                  │
+│              ▼                                 ▼                  │
+│   ┌─────────────────────┐          ┌─────────────────────┐      │
+│   │ Teacher анализирует │          │ Финальная проверка  │      │
+│   │ → гипотеза          │          │ ПЕРЕД применением   │      │
+│   └──────────┬──────────┘          └──────────┬──────────┘      │
+│              │                                 │                  │
+│              ▼                                 ▼                  │
+│   ┌─────────────────────────────────────────────────────────┐   │
+│   │              APPLY / ROLLBACK DECISION                   │   │
+│   │                                                          │   │
+│   │  IF golden_metrics.improved OR golden_metrics.unchanged  │   │
+│   │     → APPLY changes                                      │   │
+│   │  ELSE                                                    │   │
+│   │     → ROLLBACK + log failure reason                      │   │
+│   └─────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Логика валидации
+
+```typescript
+interface GoldenValidation {
+  precision_delta: number;    // change vs baseline
+  recall_delta: number;
+  hallucination_delta: number;
+  context_util_delta: number;
+}
+
+function shouldApplyChanges(golden: GoldenValidation): Decision {
+  // Critical metrics MUST NOT degrade
+  if (golden.hallucination_delta > 0.05) {
+    return { apply: false, reason: 'hallucination increased on golden set' };
+  }
+
+  // Primary metrics should not degrade significantly
+  if (golden.precision_delta < -0.05 || golden.recall_delta < -0.05) {
+    return { apply: false, reason: 'primary metrics degraded on golden set' };
+  }
+
+  // At least one metric should improve
+  const improved = [
+    golden.precision_delta > 0.02,
+    golden.recall_delta > 0.02,
+    golden.hallucination_delta < -0.01,
+    golden.context_util_delta > 0.02
+  ].some(Boolean);
+
+  if (!improved) {
+    return { apply: false, reason: 'no improvement on golden set' };
+  }
+
+  return { apply: true, reason: 'golden set validation passed' };
+}
+```
+
+---
+
 ## 1. Назначение (классическое описание)
 
 Менеджер — это **центральный координирующий мета-агент**, который:

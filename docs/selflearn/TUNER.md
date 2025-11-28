@@ -107,7 +107,130 @@
 * пишет в лог причину и инициатора;
 * при необходимости шлёт алерт Менеджеру.
 
-### 2.5. Экспорт «эффективных параметров» для рантайма
+### 2.5. Ограничения на тюнинг (Tuning Limits)
+
+> **Цель:** Предотвратить хаотичные изменения и обеспечить возможность отката.
+
+#### Правила изменений
+
+| Правило | Значение | Причина |
+|---------|----------|---------|
+| **Один impact за цикл** | max 1 параметр | Изоляция эффекта — понимаем, что именно повлияло |
+| **Размер изменения** | ±20% от текущего | Избегаем резких скачков |
+| **A/B обязателен** | 50% baseline | Всегда есть контрольная группа |
+| **Golden validation** | обязательна | Проверка на внешнем наборе |
+
+#### Журнал изменений
+
+Каждое изменение записывается в `parameter_history`:
+
+```typescript
+interface ParameterChange {
+  id: UUID;
+  parameter_key: string;        // 'retrieval.top_k'
+  old_value: any;
+  new_value: any;
+  change_percent: number;       // +10%, -15%, etc.
+
+  // Причина изменения
+  reason: string;               // 'hypothesis: precision low due to noise'
+  experiment_id: UUID;
+  initiator: 'teacher' | 'manager' | 'auto_rollback';
+
+  // Эффект
+  metrics_before: MetricsSnapshot;
+  metrics_after: MetricsSnapshot | null;  // null если ещё не измерено
+  golden_validation: 'passed' | 'failed' | 'pending';
+
+  // Метаданные
+  created_at: timestamp;
+  applied_at: timestamp | null;
+  rolled_back_at: timestamp | null;
+}
+```
+
+#### Автоматический rollback
+
+```typescript
+const ROLLBACK_RULES = {
+  // Critical — немедленный откат
+  hallucination_increase: 0.05,    // +5% галлюцинаций → rollback
+  error_rate_increase: 0.01,       // +1% ошибок → rollback
+
+  // Primary — откат после подтверждения
+  precision_decrease: 0.10,        // -10% precision → rollback
+  recall_decrease: 0.10,           // -10% recall → rollback
+
+  // Timeout — откат если нет улучшений
+  no_improvement_cycles: 3,        // 3 цикла без улучшений → rollback to stable
+};
+
+async function checkForRollback(
+  change: ParameterChange,
+  currentMetrics: Metrics,
+  baselineMetrics: Metrics
+): Promise<RollbackDecision> {
+  const deltas = computeDeltas(currentMetrics, baselineMetrics);
+
+  // Critical checks — immediate rollback
+  if (deltas.hallucination > ROLLBACK_RULES.hallucination_increase) {
+    return {
+      shouldRollback: true,
+      reason: `hallucination increased by ${deltas.hallucination * 100}%`,
+      severity: 'critical'
+    };
+  }
+
+  if (deltas.error_rate > ROLLBACK_RULES.error_rate_increase) {
+    return {
+      shouldRollback: true,
+      reason: `error rate increased by ${deltas.error_rate * 100}%`,
+      severity: 'critical'
+    };
+  }
+
+  // Primary checks
+  if (deltas.precision < -ROLLBACK_RULES.precision_decrease) {
+    return {
+      shouldRollback: true,
+      reason: `precision decreased by ${Math.abs(deltas.precision) * 100}%`,
+      severity: 'primary'
+    };
+  }
+
+  return { shouldRollback: false };
+}
+```
+
+#### Пример flow с ограничениями
+
+```
+Цикл 1:
+├── Гипотеза: "top_k слишком большой, много шума"
+├── Изменение: top_k: 5 → 4 (−20%)  ✅ в пределах лимита
+├── A/B: 50% на top_k=5, 50% на top_k=4
+├── Результат: precision +8% на variant
+├── Golden validation: passed
+└── Решение: APPLY
+
+Цикл 2:
+├── Гипотеза: "temperature можно снизить"
+├── Изменение: temperature: 0.7 → 0.3 (−57%)  ❌ превышает ±20%
+├── Корректировка: temperature: 0.7 → 0.56 (−20%)  ✅
+├── A/B: 50% на 0.7, 50% на 0.56
+├── Результат: hallucination −3%
+├── Golden validation: passed
+└── Решение: APPLY
+
+Цикл 3:
+├── Изменение: top_k: 4 → 3 (−25%)  ❌ превышает ±20%
+├── Отклонено Tuner'ом
+└── Рекомендация: разбить на 2 цикла (4→3.2→3)
+```
+
+---
+
+### 2.6. Экспорт «эффективных параметров» для рантайма
 
 MaaS и Sim Runner должны получать **готовый набор параметров**, а не собирать его сами из кучи таблиц.
 

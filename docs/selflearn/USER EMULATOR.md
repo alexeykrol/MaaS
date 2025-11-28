@@ -646,6 +646,114 @@ function validateScenario(scenario: Scenario): ValidationResult {
 
 ---
 
+## 3.11. Разделение данных: Train / Validation / Test
+
+> **Проблема:** Если система обучается и тестируется на одних и тех же диалогах, она может "переобучиться на себя".
+
+### Три набора данных
+
+| Набор | Размер | Использование | Кто генерирует |
+|-------|--------|---------------|----------------|
+| **Train** | 70% | Эмуляция для обучения | Emulator (динамически) |
+| **Validation** | 15% | Проверка гипотез во время цикла | Emulator (фиксированный) |
+| **Test (Golden)** | 15% | Финальная валидация изменений | Человек / фиксированный |
+
+### Правила использования
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    DATA SPLIT RULES                              │
+│                                                                  │
+│  TRAIN (70%)                                                     │
+│  ├── Генерируется эмулятором каждый цикл                        │
+│  ├── Используется для анализа и формирования гипотез            │
+│  └── МОЖНО менять сценарии между циклами                        │
+│                                                                  │
+│  VALIDATION (15%)                                                │
+│  ├── Фиксированный набор сценариев                              │
+│  ├── Используется для проверки гипотезы ПЕРЕД применением       │
+│  └── НЕ МЕНЯЕТСЯ в течение эксперимента                         │
+│                                                                  │
+│  TEST / GOLDEN (15%)                                             │
+│  ├── Полностью независимый набор                                │
+│  ├── Используется ТОЛЬКО для финального решения apply/rollback  │
+│  ├── НЕ ВИДИТ система во время обучения                         │
+│  └── Создаётся человеком или из реальных диалогов               │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Структура сценариев по наборам
+
+```yaml
+scenarios/
+├── train/
+│   ├── career_change_001.yaml    # Генерируются эмулятором
+│   ├── career_change_002.yaml
+│   ├── health_tracking_001.yaml
+│   └── ... (динамически меняются)
+│
+├── validation/
+│   ├── val_career_001.yaml       # Фиксированные
+│   ├── val_learning_001.yaml
+│   └── val_mixed_001.yaml
+│
+└── golden/                       # НЕ ТРОГАТЬ
+    ├── gold_real_user_001.yaml   # Из реальных диалогов
+    ├── gold_edge_case_001.yaml   # Граничные случаи
+    └── gold_regression_001.yaml  # Регрессионные тесты
+```
+
+### Предотвращение утечки данных
+
+```typescript
+interface DataSplit {
+  train: ScenarioSet;
+  validation: ScenarioSet;
+  golden: ScenarioSet;
+}
+
+function validateNoLeakage(split: DataSplit): ValidationResult {
+  const trainIds = new Set(split.train.scenarios.map(s => s.id));
+  const valIds = new Set(split.validation.scenarios.map(s => s.id));
+  const goldenIds = new Set(split.golden.scenarios.map(s => s.id));
+
+  // No overlap between sets
+  const trainValOverlap = intersection(trainIds, valIds);
+  const trainGoldenOverlap = intersection(trainIds, goldenIds);
+  const valGoldenOverlap = intersection(valIds, goldenIds);
+
+  if (trainValOverlap.size > 0 || trainGoldenOverlap.size > 0 || valGoldenOverlap.size > 0) {
+    return {
+      valid: false,
+      error: 'Data leakage detected between splits'
+    };
+  }
+
+  // Golden should never be modified
+  const goldenHash = hashScenarios(split.golden);
+  if (goldenHash !== EXPECTED_GOLDEN_HASH) {
+    return {
+      valid: false,
+      error: 'Golden dataset was modified!'
+    };
+  }
+
+  return { valid: true };
+}
+```
+
+### Когда какой набор использовать
+
+| Этап цикла | Train | Validation | Golden |
+|------------|-------|------------|--------|
+| Эмуляция | ✅ | ❌ | ❌ |
+| Анализ метрик | ✅ | ❌ | ❌ |
+| Проверка гипотезы | ❌ | ✅ | ❌ |
+| Решение apply/rollback | ❌ | ❌ | ✅ |
+
+---
+
 ## 4. Взаимодействие эмулятора с MaaS
 
 Эмулятор **не использует внутренние API**, а работает как внешний пользователь.
