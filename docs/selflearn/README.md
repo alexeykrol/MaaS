@@ -73,7 +73,7 @@
 | Компонент | Документ | Что делает |
 |-----------|----------|------------|
 | **Manager** | [MANAGER.md](./MANAGER.md) | Координатор циклов, оркестрирует sub-agents |
-| **Emulator** | [USER EMULATOR.md](./USER%20EMULATOR.md) | Генерация диалогов (Student ↔ Teacher agents) |
+| **Emulator** | [USER EMULATOR.md](./USER%20EMULATOR.md) | Генерация диалогов (Student ↔ Mentor agents через MaaS) |
 | **Sensor** | — | Читает из MaaS, пишет в `sensor_events` |
 | **Analyst** | [ANALYST.md](./ANALYST.md) | "Что не так?" — метрики, verdict, диагноз |
 | **Teacher** | [TEACHER.md](./TEACHER.md) | "Как исправить?" — гипотезы, change_request |
@@ -133,7 +133,7 @@
 |-----|----------------|
 | 1 | Agent → Manager: Campaign с targets, constraints, allowed_impacts |
 | 2 | Manager → Emulator: запуск эмуляции (N диалогов) |
-| 3 | Emulator → MaaS: Student ↔ Teacher agents диалогируют |
+| 3 | Emulator → MaaS: Student ↔ Mentor agents диалогируют (raw_logs + lsm_storage) |
 | 4 | Sensor ← MaaS: съём данных в `sensor_events` |
 | 5 | Manager → Analyst: запрос анализа batch |
 | 6 | **Analyst**: вычисление метрик, сравнение с targets, verdict |

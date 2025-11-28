@@ -189,7 +189,7 @@ Manager state: cycle_number, focus_metric
     │
     ├── Step 1: EMULATE (async)
     │       ├── Manager → Emulator: "run N dialogs"
-    │       ├── Emulator: Student ↔ Teacher agents
+    │       ├── Emulator: Student ↔ Mentor agents → raw_logs + lsm_storage
     │       ├── Sensor: writes to sensor_events
     │       └── Emulator → Manager: "batch completed"
     │
