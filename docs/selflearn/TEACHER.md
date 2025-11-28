@@ -1,440 +1,507 @@
-Дам как законченный кусок, который можно вставить в отдельный `TEACHER.md` или в раздел про роли.
+# TEACHER — роль Учителя
+
+> **Ключевая задача:** "Как исправить?" — генерация гипотез, выбор импактов, формирование рекомендаций.
 
 ---
-
-# TEACHER — роль Учителя / Исследователя
 
 ## 0. Краткое определение
 
-**Учитель (Teacher / Evaluator / Researcher / Analyst)** — это модуль, который:
+**Учитель (Teacher)** — это модуль, который:
 
-* **оценивает качество работы MaaS** по формальным метрикам и через LLM-оценки;
-* **формулирует и проверяет гипотезы** о том, какие импакт-факторы нужно менять;
-* **выдаёт формальные рекомендации** для Настройщика и Менеджера в виде машинно-читаемых действий.
+* **получает verdict** от Analyst с диагнозом проблемы;
+* **генерирует гипотезы** о том, какой импакт нужно изменить;
+* **определяет направление и величину** изменения;
+* **формирует рекомендации** для Tuner в машинно-читаемом виде;
+* **отслеживает историю гипотез** — что уже пробовали, что сработало.
 
-Учитель **никогда сам не меняет параметры** MaaS и не ходит в прод напрямую. Он работает поверх телеметрии и экспериментальных запусков.
-
----
-
-## 1. Зона ответственности и границы
-
-### 1.1. Что делает Учитель
-
-1. **Читает данные:**
-
-   * телеметрию (`telemetry_events`, `pipeline_runs`);
-   * golden dataset + симуляторные сессии;
-   * текущие и прошлые параметры (`experiment_parameters`);
-   * историю экспериментов (`experiment_results`).
-
-2. **Считает и интерпретирует метрики:**
-
-   * primary: precision, recall, context utilization, hallucination rate;
-   * secondary: latency, token cost, error rate;
-   * diagnostic: hit rate, memory age, распределения по категориям задач.
-
-3. **Проектирует эксперименты:**
-
-   * выбирает, какие параметры варьировать;
-   * задаёт baseline и варианты;
-   * формулирует success-criteria и границы допустимых побочек.
-
-4. **Анализирует результаты:**
-
-   * сравнивает baseline vs variants;
-   * применяет статистические критерии (t-test, пороги дельты, p-value);
-   * выявляет trade-offs (precision↑, recall↓ и т.п.).
-
-5. **Формирует рекомендации:**
-
-   * «что поменять» (`param`, `from`, `to`);
-   * «зачем» (основание: конкретные метрики/эксперимент);
-   * «как откатывать» (rollback-условия).
-
-### 1.2. Чего Учитель НЕ делает
-
-* **Не** пишет в `experiment_parameters` — это задача Настройщика.
-* **Не** отвечает за запуск симулятора — это зона Менеджера.
-* **Не** общается с мета-пользователем напрямую — только через Менеджера.
-* **Не** придумывает цель обучения — только оптимизирует под заданную функцию качества и constraints.
+Teacher **не вычисляет метрики** и **не анализирует данные** — это задача Analyst.
 
 ---
 
-## 2. Входы и выходы модуля Учителя
+## 0.1. Отличие от Analyst
+
+| Аспект | Analyst | Teacher |
+|--------|---------|---------|
+| **Вопрос** | "Что не так?" | "Как исправить?" |
+| **Вход** | sensor_events, raw data | verdict от Analyst |
+| **Выход** | verdict, diagnosis | hypothesis, change_request |
+| **Знания** | Формулы метрик | Связи метрика↔импакт |
+| **LLM роль** | Judge (оценка качества) | Reasoner (генерация решений) |
+
+---
+
+## 1. Зона ответственности
+
+### 1.1. Что делает Teacher
+
+1. **Получает verdict от Analyst:**
+   * Текущие метрики и gaps
+   * Worst metric и её значение
+   * Diagnosis с probable_causes
+
+2. **Анализирует связи метрика↔импакт:**
+   * Использует IMPACTS.md как справочник
+   * Определяет, какой импакт влияет на worst_metric
+
+3. **Генерирует гипотезу:**
+   * Какой параметр менять
+   * В какую сторону (увеличить/уменьшить)
+   * На сколько (в пределах ±20%)
+
+4. **Проверяет историю:**
+   * Не пробовали ли это уже?
+   * Не откатывались ли с такого значения?
+
+5. **Формирует change_request:**
+   * Структурированный запрос для Tuner
+   * Условия rollback
+
+### 1.2. Чего Teacher НЕ делает
+
+* **Не** вычисляет метрики — это Analyst
+* **Не** запускает LLM-judge — это Analyst
+* **Не** пишет в `impact_values` — это Tuner
+* **Не** запускает эмуляцию — это Manager
+
+---
+
+## 2. Входы и выходы
 
 ### 2.1. Входы
 
-1. **Experiment Request** (от Менеджера):
+```typescript
+interface TeacherInput {
+  // От Analyst (через Manager)
+  verdict: AnalystVerdict;
 
-```json
-{
-  "experiment_id": "top_k_precision_recall_v1",
-  "goal": {
-    "primary_metrics": ["retrieval_precision", "retrieval_recall"],
-    "constraints": ["latency_p95", "token_cost"],
-    "targets": {
-      "retrieval_precision": { "direction": "increase", "min_delta": 0.05 },
-      "retrieval_recall": { "direction": "no_large_drop", "max_delta": -0.03 }
-    }
-  },
-  "allowed_impacts": ["retrieval.top_k", "llm.temperature", "system_prompt_version"]
+  // Из БД
+  current_impacts: ImpactValue[];         // Текущие значения
+  hypothesis_history: HypothesisRecord[]; // История гипотез
+  parameter_history: ParameterChange[];   // История изменений
 }
 ```
-
-2. **Telemetry & Metrics:**
-
-   * сырые записи `telemetry_events`, `pipeline_runs`;
-   * агрегаты по метрикам (SQL-view или materialized views).
-
-3. **Параметры и история:**
-
-   * активная конфигурация (`experiment_parameters WHERE is_active = true`);
-   * прошлые версии параметров и их эффекты (`experiment_results`, change log).
-
-4. **LLM-Judge Prompts:**
-
-   * промпты для оценки relevance/context/hallucinations из `SELFLEARN / LLM-Judge`.
-
----
 
 ### 2.2. Выходы
 
-1. **Experiment Design** (для Менеджера и Настройщика):
+```typescript
+interface TeacherOutput {
+  type: 'change_request';
+  timestamp: Date;
 
-```json
-{
-  "type": "experiment_spec",
-  "experiment_id": "top_k_3_vs_2_temp_0_7",
-  "variants": [
-    { "name": "baseline", "params": { "retrieval.top_k": 3, "llm.temperature": 0.7 } },
-    { "name": "variant",  "params": { "retrieval.top_k": 2, "llm.temperature": 0.7 } }
-  ],
-  "assignment": {
-    "mode": "by_example",
-    "split": [0.5, 0.5]
-  },
-  "success_criteria": [
-    {
-      "metric": "retrieval_precision",
-      "direction": "increase",
-      "min_delta": 0.05,
-      "p_value_threshold": 0.05
-    },
-    {
-      "metric": "retrieval_recall",
-      "direction": "no_large_drop",
-      "max_delta": -0.03
-    }
-  ]
+  // Гипотеза
+  hypothesis: {
+    id: string;
+    description: string;
+    rationale: string;  // Почему это должно помочь
+    confidence: 'low' | 'medium' | 'high';
+  };
+
+  // Предлагаемое изменение
+  change: {
+    impact_key: string;           // 'retrieval.top_k'
+    current_value: any;
+    proposed_value: any;
+    change_percent: number;       // +10%, -15%
+  };
+
+  // Ожидаемый эффект
+  expected_effect: {
+    metric: string;               // 'precision'
+    direction: 'increase' | 'decrease';
+    estimated_delta: number;      // +0.05 (5%)
+  };
+
+  // Условия rollback
+  rollback_conditions: {
+    metric: string;
+    threshold: number;
+    cycles: number;
+  }[];
+
+  // Для Tuner
+  change_request: ChangeRequest;
 }
 ```
 
-2. **Experiment Evaluation Result**:
+### 2.3. Пример change_request
 
 ```json
 {
-  "experiment_id": "top_k_3_vs_2_temp_0_7",
-  "status": "completed",
-  "verdict": "winner", // | "loser" | "inconclusive"
-  "metrics": {
-    "baseline": {
-      "retrieval_precision": 0.68,
-      "retrieval_recall": 0.72,
-      "latency_p95": 4800
-    },
-    "variant": {
-      "retrieval_precision": 0.77,
-      "retrieval_recall": 0.70,
-      "latency_p95": 4900
-    }
-  },
-  "p_values": {
-    "retrieval_precision": 0.01,
-    "retrieval_recall": 0.20
-  },
-  "notes": "precision вырос на 9 п.п. при статистически незначимом падении recall"
-}
-```
+  "type": "change_request",
+  "timestamp": "2024-11-28T15:00:00Z",
 
-3. **Recommendations for Tuner** (через Менеджера):
+  "hypothesis": {
+    "id": "hyp_20241128_001",
+    "description": "Уменьшение top_k повысит precision за счёт фильтрации шума",
+    "rationale": "Precision низкий (0.65 vs target 0.80). Diagnosis указывает на 'top_k слишком большой'. При top_k=5 поднимается много нерелевантных memories.",
+    "confidence": "high"
+  },
 
-```json
-{
-  "action": "update_params",
-  "experiment_id": "top_k_3_vs_2_temp_0_7",
-  "reason": "precision↑ на 9 п.п., падение recall в пределах допусков",
-  "changes": [
-    { "param": "retrieval.top_k", "from": 3, "to": 2 }
+  "change": {
+    "impact_key": "retrieval.top_k",
+    "current_value": 5,
+    "proposed_value": 4,
+    "change_percent": -20
+  },
+
+  "expected_effect": {
+    "metric": "precision",
+    "direction": "increase",
+    "estimated_delta": 0.10
+  },
+
+  "rollback_conditions": [
+    { "metric": "precision", "threshold": -0.10, "cycles": 3 },
+    { "metric": "recall", "threshold": -0.15, "cycles": 2 },
+    { "metric": "hallucination_rate", "threshold": 0.05, "cycles": 2 }
   ],
-  "rollback_conditions": {
-    "retrieval_precision": { "delta_threshold": -0.10, "cycles": 3 },
-    "hallucination_rate": { "delta_threshold": +0.05, "cycles": 2 }
+
+  "change_request": {
+    "changes": [
+      { "param": "retrieval.top_k", "from": 5, "to": 4 }
+    ],
+    "reason": "hypothesis: precision low due to noise",
+    "experiment_id": "exp_top_k_5_to_4",
+    "initiator": "teacher"
   }
 }
 ```
 
-4. **Hypothesis Registry Updates:**
-
-   * статус гипотез (подтвeрждена/опровергнута);
-   * «куда копать дальше» (следующие эксперименты).
-
 ---
 
-## 3. Внутренняя структура Учителя
+## 3. Внутренняя структура
 
-На уровне реализации Учителя разумно разделить на несколько подмодулей.
+### 3.1. Impact Knowledge Base
 
-### 3.1. Metrics Aggregator
+**Задача:** связать метрики с импактами.
 
-**Задача:** привести сырую телеметрию к виду «метрики по вариантам».
-
-* Группирует `telemetry_events` по:
-
-  * `experiment_id`,
-  * `variant`,
-  * категориям запросов (factual/preference/temporal и т.д.).
-* Считает:
-
-  * средние/процентили по latency, cost;
-  * долю успешных retrieval;
-  * precision/recall по golden-dataset;
-  * hallucination_rate, context_utilization из LLM-judge полей.
-
-**Интерфейс:**
-
-```ts
-type AggregatedMetrics = {
-  variant: string;
-  sample_size: number;
-  metrics: Record<string, number>;
+```typescript
+// Справочник связей (из IMPACTS.md)
+const METRIC_TO_IMPACT: Record<string, ImpactInfo[]> = {
+  'precision': [
+    {
+      impact: 'retrieval.top_k',
+      direction: 'decrease',  // уменьшить top_k → повысить precision
+      effect: 'strong',
+      trade_off: 'recall может снизиться'
+    },
+    {
+      impact: 'retrieval.relevance_weight',
+      direction: 'increase',
+      effect: 'medium',
+      trade_off: 'свежие memories могут терять приоритет'
+    }
+  ],
+  'recall': [
+    {
+      impact: 'retrieval.top_k',
+      direction: 'increase',
+      effect: 'strong',
+      trade_off: 'precision может снизиться'
+    },
+    {
+      impact: 'retrieval.similarity_threshold',
+      direction: 'decrease',
+      effect: 'medium',
+      trade_off: 'может подниматься шум'
+    }
+  ],
+  'hallucination_rate': [
+    {
+      impact: 'llm.temperature',
+      direction: 'decrease',
+      effect: 'strong',
+      trade_off: 'ответы могут стать менее разнообразными'
+    },
+    {
+      impact: 'prompts.responder',
+      direction: 'strengthen_grounding',
+      effect: 'medium',
+      trade_off: null
+    }
+  ],
+  'context_utilization': [
+    {
+      impact: 'prompts.responder',
+      direction: 'emphasize_context',
+      effect: 'strong',
+      trade_off: null
+    },
+    {
+      impact: 'context.max_tokens',
+      direction: 'optimize',  // не слишком много, не слишком мало
+      effect: 'medium',
+      trade_off: 'баланс между полнотой и фокусом'
+    }
+  ]
 };
+```
 
-async function getAggregatedMetrics(experimentId: string): Promise<AggregatedMetrics[]> { ... }
+### 3.2. Hypothesis Generator
+
+**Задача:** на основе verdict и knowledge base сгенерировать гипотезу.
+
+```typescript
+interface HypothesisGenerator {
+  generate(
+    verdict: AnalystVerdict,
+    currentImpacts: ImpactValue[],
+    history: HypothesisRecord[]
+  ): Hypothesis;
+}
+
+function generateHypothesis(verdict: AnalystVerdict): Hypothesis {
+  const worstMetric = verdict.verdict.worst_metric;
+  const possibleImpacts = METRIC_TO_IMPACT[worstMetric];
+
+  // Фильтруем уже попробованные
+  const untried = possibleImpacts.filter(
+    imp => !wasRecentlyTried(imp.impact, history)
+  );
+
+  // Выбираем с наибольшим ожидаемым эффектом
+  const best = untried.sort((a, b) =>
+    effectScore(b.effect) - effectScore(a.effect)
+  )[0];
+
+  return {
+    impact: best.impact,
+    direction: best.direction,
+    confidence: untried.length > 2 ? 'high' : 'medium',
+    trade_off: best.trade_off
+  };
+}
+```
+
+### 3.3. Change Calculator
+
+**Задача:** определить конкретное новое значение импакта.
+
+```typescript
+interface ChangeCalculator {
+  calculate(
+    impact: string,
+    direction: 'increase' | 'decrease',
+    currentValue: any,
+    constraints: ImpactConstraints
+  ): ProposedChange;
+}
+
+function calculateChange(
+  impact: string,
+  direction: string,
+  current: number
+): ProposedChange {
+  // Ограничение ±20%
+  const maxChange = current * 0.20;
+
+  const delta = direction === 'increase' ? maxChange : -maxChange;
+  const proposed = current + delta;
+
+  // Проверяем границы из constraints
+  const bounded = Math.max(
+    constraints.min,
+    Math.min(constraints.max, proposed)
+  );
+
+  return {
+    current,
+    proposed: bounded,
+    change_percent: ((bounded - current) / current) * 100
+  };
+}
+```
+
+### 3.4. History Checker
+
+**Задача:** проверить, не повторяем ли мы прошлые неудачные попытки.
+
+```typescript
+interface HistoryChecker {
+  wasRecentlyTried(impact: string, cycles: number): boolean;
+  wasRolledBack(impact: string, value: any): boolean;
+  getLastResult(impact: string): HypothesisResult | null;
+}
+
+function wasRecentlyTried(impact: string, history: HypothesisRecord[]): boolean {
+  const recent = history.filter(h =>
+    h.impact === impact &&
+    h.created_at > daysAgo(7) &&
+    h.status !== 'rejected'
+  );
+  return recent.length > 0;
+}
+```
+
+### 3.5. Recommendation Formatter
+
+**Задача:** собрать всё в формат для Tuner.
+
+```typescript
+interface RecommendationFormatter {
+  format(
+    hypothesis: Hypothesis,
+    change: ProposedChange,
+    verdict: AnalystVerdict
+  ): ChangeRequest;
+}
 ```
 
 ---
 
-### 3.2. Judge Orchestrator (LLM-оценка)
+## 4. Жизненный цикл работы Teacher
 
-**Задача:** запускать LLM-judge там, где нужны качественные оценки.
-
-* Выбирает подмножество сессий/шагов для глубокой проверки.
-* Вызывает LLM с промптами:
-
-  * Retrieval Relevance Judge;
-  * Context Utilization Judge;
-  * Hallucination Detection Judge.
-* Записывает результаты обратно в `telemetry_events` (или отдельную таблицу).
-
-**Критичный момент:**
-LLM-judge **не должен подменять SQL-метрики**, он дополняет их (особенно по hallucinations и context usage).
-
----
-
-### 3.3. Experiment Designer
-
-**Задача:** на основе запроса от Менеджера придумать «разумный» эксперимент.
-
-* Выбирает подмножество параметров из `allowed_impacts`.
-* Опирается на:
-
-  * текущие значения параметров;
-  * допустимые диапазоны (из IMPACTS / границы автономии);
-  * историю прошлых экспериментов (чтобы не гонять одно и то же).
-
-**Выход:** `experiment_spec`, понятный Симулятору и Настройщику.
-
----
-
-### 3.4. Result Analyzer / Statistician
-
-**Задача:** понять, есть ли реальный эффект от изменения.
-
-* Проверяет, достаточно ли данных (`MIN_SAMPLES_PER_VARIANT`).
-* Считает дельты по ключевым метрикам baseline vs variant.
-* Применяет статистический тест (минимум two-sample t-test или z-test).
-* Сравнивает с success-criteria, заданными при дизайне эксперимента.
-
-**Интерфейс:**
-
-```ts
-type MetricComparison = {
-  metric: string;
-  baseline: number[];
-  variant: number[];
-  delta: number;
-  pValue: number;
-  passes: boolean;
-};
-
-function compareMetrics(
-  baseline: number[],
-  variant: number[],
-  spec: SuccessCriterion
-): MetricComparison { ... }
+```
+1. Получить verdict от Analyst (через Manager)
+       ↓
+2. Определить worst_metric
+       ↓
+3. Найти связанные импакты в Knowledge Base
+       ↓
+4. Проверить историю
+   • Что уже пробовали?
+   • Откуда откатывались?
+       ↓
+5. Выбрать лучший кандидат
+       ↓
+6. Вычислить новое значение
+   • В пределах ±20%
+   • В пределах constraints
+       ↓
+7. Сформировать hypothesis
+       ↓
+8. Сформировать change_request
+       ↓
+9. Отправить Manager'у → Tuner
+       ↓
+10. Записать hypothesis в историю
 ```
 
 ---
 
-### 3.5. Hypothesis Manager
+## 5. Артефакты и таблицы
 
-**Задача:** хранить и обновлять «карту гипотез».
-
-* Каждая гипотеза: «если подвигать X → Y, то улучшится Z при ограничениях W».
-* Для каждой гипотезы:
-
-  * статус: `planned`, `running`, `confirmed`, `rejected`, `inconclusive`;
-  * ссылки на эксперименты и результаты;
-  * предложение следующих шагов (усилить/ослабить эффект, попробовать другие параметры).
-
-Это нужно, чтобы система не бегала по кругу и чтобы мета-пользователь видел, *что именно* уже проверено.
-
----
-
-### 3.6. Recommendation Generator
-
-**Задача:** собрать всё вышеописанное в конкретное действие.
-
-* Принимает:
-
-  * `AggregatedMetrics` по вариантам;
-  * вывод Statistician;
-  * контекст цели эксперимента и ограничений.
-* Решает:
-
-  * `winner` / `loser` / `inconclusive`;
-  * есть ли смысл менять параметры;
-  * какие поставить rollback-правила.
-* Выдаёт строго формализованный JSON для Настройщика.
-
----
-
-## 4. Жизненный цикл работы Учителя в одном эксперименте
-
-1. **Получить Experiment Request** от Менеджера.
-2. **Спроектировать Experiment Spec**:
-
-   * выбрать параметры и их значения;
-   * прописать success-criteria.
-3. **Отдать Spec Менеджеру / Настройщику** (для подготовки параметров и запуска Sim Runner).
-4. **Ждать завершения эксперимента** (фактически — появления достаточной телеметрии).
-5. **Считать AggregatedMetrics**:
-
-   * baseline vs variant;
-   * отдельно по категориям задач (если нужно).
-6. **Запустить Judge Orchestrator** (по подвыборке шагов).
-7. **Прогнать Result Analyzer**:
-
-   * дельты, p-value, соответствие success-criteria.
-8. **Сформировать Recommendation**:
-
-   * какие изменения рекомендованы;
-   * какие rollback-условия;
-   * статус гипотезы.
-9. **Отдать Recommendation Менеджеру** и записать в `experiment_results`.
-
----
-
-## 5. Основные артефакты и таблицы Учителя
-
-Минимум нужны:
-
-1. **`experiment_results`** — итог по эксперименту:
+### 5.1. Таблица hypothesis_history
 
 ```sql
-CREATE TABLE experiment_results (
+CREATE TABLE hypothesis_history (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  experiment_id TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  verdict TEXT, -- 'winner' | 'loser' | 'inconclusive'
-  metrics_baseline JSONB,
-  metrics_variant JSONB,
-  p_values JSONB,
-  recommendation JSONB, -- тот самый action/update_params/rollback_conditions
-  notes TEXT
+
+  -- Гипотеза
+  hypothesis_id TEXT NOT NULL,
+  description TEXT NOT NULL,
+  rationale TEXT,
+  confidence TEXT,  -- 'low' | 'medium' | 'high'
+
+  -- Связь с verdict
+  verdict_id UUID REFERENCES analysis_verdicts(id),
+  target_metric TEXT NOT NULL,
+
+  -- Предложенное изменение
+  impact_key TEXT NOT NULL,
+  current_value JSONB,
+  proposed_value JSONB,
+  change_percent NUMERIC,
+
+  -- Результат (заполняется после эксперимента)
+  status TEXT DEFAULT 'pending',  -- 'pending' | 'applied' | 'confirmed' | 'rejected' | 'rolled_back'
+  actual_effect JSONB,
+  resolved_at TIMESTAMPTZ
 );
 ```
 
-2. **`experiment_hypotheses`** — реестр гипотез:
+---
 
-```sql
-CREATE TABLE experiment_hypotheses (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name TEXT,
-  description TEXT,
-  status TEXT, -- 'planned' | 'running' | 'confirmed' | 'rejected' | 'inconclusive'
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  related_experiments TEXT[],
-  tags TEXT[]
-);
+## 6. Инварианты и правила
+
+1. **Teacher не анализирует данные напрямую**
+   * Работает только с verdict от Analyst
+   * Не делает SQL запросов к sensor_events
+
+2. **Один импакт за раз**
+   * Для изоляции эффекта
+   * Если нужно несколько — в разных циклах
+
+3. **Ограничение ±20%**
+   * Без резких изменений
+   * Gradual tuning
+
+4. **Проверка истории обязательна**
+   * Не повторять недавние неудачи
+   * Учитывать rollback'и
+
+5. **Явные trade-offs**
+   * Каждая рекомендация указывает риски
+   * Manager/Meta-user должен быть в курсе
+
+---
+
+## 7. Метрики качества Teacher
+
+| Метрика | Описание | Target |
+|---------|----------|--------|
+| **Hypothesis Success Rate** | % гипотез, которые привели к улучшению | > 50% |
+| **Recommendation Acceptance** | % рекомендаций, принятых Tuner'ом | > 90% |
+| **Cycles to Improvement** | Среднее число циклов до достижения target | < 5 |
+| **Rollback Rate** | % изменений, которые пришлось откатить | < 20% |
+
+---
+
+## 8. Связь с другими компонентами
+
+```
+ANALYST ──────► verdict ──────► TEACHER
+                                    │
+                                    ▼
+                             change_request
+                                    │
+                                    ▼
+Manager ◄─────────────────────── TEACHER
+    │
+    ▼
+TUNER (применяет изменения)
 ```
 
 ---
 
-## 6. Инварианты и правила для Учителя
+## 9. Пример полного flow
 
-Чтобы он не начал творить магию:
+```
+=== Цикл 1 ===
 
-1. **Источник истины — SQL-метрики.**
+Analyst verdict:
+  worst_metric: precision (0.65 vs target 0.80)
+  diagnosis: "top_k слишком большой"
 
-   * Любой вывод должен ссылаться на конкретные числа/агрегаты.
+Teacher:
+  1. Находит в Knowledge Base: precision ← top_k (decrease)
+  2. Проверяет историю: top_k не менялся недавно
+  3. Вычисляет: top_k 5 → 4 (−20%)
+  4. Формирует hypothesis:
+     "Уменьшение top_k с 5 до 4 повысит precision"
+  5. Отправляет change_request в Tuner
 
-2. **LLM-judge — вторичный источник.**
+Результат:
+  precision: 0.65 → 0.73 (+8 п.п.)
+  recall: 0.72 → 0.70 (−2 п.п., в пределах допуска)
 
-   * Judge помогает там, где SQL не может (hallucination severity, контекст-использование), но не отменяет чисел.
+Teacher обновляет hypothesis:
+  status: 'confirmed'
+  actual_effect: { precision: +0.08, recall: -0.02 }
 
-3. **Никаких прямых записей в параметры.**
+=== Цикл 2 ===
 
-   * Учитель никогда не вызывает `activate_parameter_version()` и не пишет в `experiment_parameters`.
+Analyst verdict:
+  worst_metric: precision (0.73 vs target 0.80)
+  diagnosis: "top_k уже снижен, попробовать relevance_weight"
 
-4. **Все решения — реплицируемы.**
-
-   * Любую рекомендацию можно воспроизвести, имея:
-
-     * `experiment_spec`,
-     * снапшот телеметрии,
-     * код аналитики.
-
-5. **Явное указание trade-offs.**
-
-   * Любая рекомендация должна явно описывать:
-
-     * что выиграли,
-     * чем пожертвовали,
-     * почему это считается приемлемым.
-
----
-
-## 7. Метрики качества самого Учителя
-
-Чтобы потом не спорить «он помогает или мешает»:
-
-* **Experiment Yield:** доля экспериментов, по которым получен «winner» с понятным эффектом (не `inconclusive`).
-* **Regression Catch Rate:** сколько деградаций качества было обнаружено учителем до того, как они ударили по реальным пользователям.
-* **Hypothesis Resolution Time:** среднее время от постановки гипотезы до чёткого verdict.
-* **Stability:** нет ли постоянных качелей «вперёд-назад» по одним и тем же параметрам без улучшения глобальных метрик.
+Teacher:
+  1. top_k уже пробовали → берём следующий кандидат
+  2. relevance_weight: 0.5 → 0.6 (+20%)
+  ...
+```
 
 ---
 
-## 8. Основные риски / слабые места
-
-Кратко, чтобы разработка сразу держала это в голове:
-
-1. **Учитель сам может «галлюцинировать»**, особенно в части объяснений. Поэтому:
-
-   * всё важное должно опираться на SQL-агрегаты;
-   * любые текстовые выводы — только как комментарий, не как источник истины.
-
-2. **Риск переоптимизации под golden-dataset/симулятор.**
-
-   * Нужна регулярная сверка offline-результатов с online-метриками.
-
-3. **Сложность/хрупкость статистики.**
-
-   * При маленьких выборках t-test даёт мусор;
-   * нужно жёстко контролировать `MIN_SAMPLES_PER_VARIANT` и не доверять «красивым» p-values на 10 запросах.
-
----
-
-Если нужно, дальше можно сделать «узкую» ТЗ-версию: список функций/ендпоинтов для Teacher-сервиса (`POST /experiments/plan`, `POST /experiments/evaluate`, `GET /experiments/:id/results`) и конкретные типы данных в TS.
+*Последнее обновление: 2025-11-28*
