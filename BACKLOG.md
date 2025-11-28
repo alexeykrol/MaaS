@@ -1,38 +1,59 @@
 # Backlog разработки MaaS
 
+## 🎯 Quick Status
+
+> **Где мы сейчас:** MVP завершён, начинаем Phase 2A (Self-Learning)
+> **Текущий фокус:** Step 12 — DB Schema + Emulator v0
+> **Последнее действие:** Реструктуризация BACKLOG с vertical slice подходом
+
+---
+
 ## Содержание
 
-### MVP (Backend Only)
-1. [Принципы разработки](#принципы-разработки)
-2. [Шаг 0: Подготовка](#шаг-0-подготовка)
-3. [Шаг 1: База данных](#шаг-1-база-данных)
-4. [**Шаг 2: Test Runner** (ПРИОРИТЕТ!)](#шаг-2-test-runner)
-5. [Шаг 3: Orchestrator](#шаг-3-orchestrator)
-6. [Шаг 4: Agent Stubs](#шаг-4-agent-stubs-заглушки)
-7. [Шаг 5: Logger](#шаг-5-logger-v1)
-8. [Шаг 6: Analyzer](#шаг-6-analyzer-v1-реальный)
-9. [Шаг 7: Assembler](#шаг-7-assembler-v1-реальный)
-10. [Шаг 8: Final Responder](#шаг-8-final-responder-v1-реальный)
-11. [Шаг 9: Archivist](#шаг-9-archivist-v1)
-12. [Шаг 10: Assembler v2 (с LSM)](#шаг-10-assembler-v2-с-lsm)
-13. [Шаг 11: Полировка](#шаг-11-полировка)
+### Phase 1: MVP (Backend Only) ✅ COMPLETED
 
-### Phase 2A: Self-Learning — Make it Work (минимальные модули)
-14. [Шаг 12: DB Schema + Emulator v0](#шаг-12-db-schema--emulator-v0)
-15. [Шаг 13: Sensor v0 + Analyst v0](#шаг-13-sensor-v0--analyst-v0)
-16. [Шаг 14: Teacher v0 + Tuner v0](#шаг-14-teacher-v0--tuner-v0)
-17. [Шаг 15: Manager v0 (E2E цикл)](#шаг-15-manager-v0-e2e-цикл)
+| # | Шаг | Статус |
+|---|-----|--------|
+| 0 | [Подготовка](#шаг-0-подготовка) | ✅ |
+| 1 | [База данных](#шаг-1-база-данных) | ✅ |
+| 2 | [Test Runner](#шаг-2-test-runner) | ✅ |
+| 3 | [Orchestrator](#шаг-3-orchestrator) | ✅ |
+| 4 | [Agent Stubs](#шаг-4-agent-stubs-заглушки) | ✅ |
+| 5 | [Logger](#шаг-5-logger-v1) | ✅ |
+| 6 | [Analyzer](#шаг-6-analyzer-v1-реальный) | ✅ |
+| 7 | [Assembler](#шаг-7-assembler-v1-реальный) | ✅ |
+| 8 | [Final Responder](#шаг-8-final-responder-v1-реальный) | ✅ |
+| 9 | [Archivist](#шаг-9-archivist-v1) | ✅ |
+| 10 | [Assembler v2 (с LSM)](#шаг-10-assembler-v2-с-lsm) | ✅ |
+| 11 | [Полировка](#шаг-11-полировка) | ✅ |
 
-### Phase 2B: Self-Learning — Make it Good (качество)
-18. [Шаг 16: LLM-Judge + Golden Dataset](#шаг-16-llm-judge--golden-dataset)
-19. [Шаг 17: Multi-metric Analyst](#шаг-17-multi-metric-analyst)
-20. [Шаг 18: Smart Teacher + Rollback](#шаг-18-smart-teacher--rollback)
-21. [Шаг 19: Agent (Mission Controller)](#шаг-19-agent-mission-controller)
+### Phase 2A: Self-Learning — Make it Work 🔄 IN PROGRESS
 
-### Phase 4: Frontend Integration
-22. [Шаг 20: Frontend Setup](#шаг-20-frontend-setup)
-23. [Шаг 21: Chat Interface](#шаг-21-chat-interface)
-24. [Шаг 22: Admin Panel](#шаг-22-admin-panel)
+| # | Шаг | Статус |
+|---|-----|--------|
+| 12 | [DB Schema + Emulator v0](#шаг-12-db-schema--emulator-v0) | ⏳ NEXT |
+| 13 | [Sensor v0 + Analyst v0](#шаг-13-sensor-v0--analyst-v0) | ⏳ |
+| 14 | [Teacher v0 + Tuner v0](#шаг-14-teacher-v0--tuner-v0) | ⏳ |
+| 15 | [Manager v0 (E2E цикл)](#шаг-15-manager-v0-e2e-цикл) | ⏳ |
+
+### Phase 2B: Self-Learning — Make it Good
+
+| # | Шаг | Статус |
+|---|-----|--------|
+| 16 | [LLM-Judge + Golden Dataset](#шаг-16-llm-judge--golden-dataset) | ⏳ |
+| 17 | [Multi-metric Analyst](#шаг-17-multi-metric-analyst) | ⏳ |
+| 18 | [Smart Teacher + Rollback](#шаг-18-smart-teacher--rollback) | ⏳ |
+| 19 | [Agent (Mission Controller)](#шаг-19-agent-mission-controller) | ⏳ |
+
+### Phase 3: Frontend Integration
+
+| # | Шаг | Статус |
+|---|-----|--------|
+| 20 | [Frontend Setup](#шаг-20-frontend-setup) | ⏳ |
+| 21 | [Chat Interface](#шаг-21-chat-interface) | ⏳ |
+| 22 | [Admin Panel](#шаг-22-admin-panel) | ⏳ |
+
+**Легенда:** ✅ Done | 🔄 In Progress | ⏳ Pending | ⏸️ Blocked
 
 ---
 
