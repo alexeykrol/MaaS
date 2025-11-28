@@ -13,18 +13,71 @@
 
 ---
 
+## Архитектура: Два уровня
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        AGENT LEVEL                              │
+│                   (Mission Controller)                          │
+│                                                                 │
+│  Мета-пользователь ──Mission──► AGENT ──отчёты──► Пользователь  │
+│                                   │                             │
+│                            ┌──────┴──────┐                      │
+│                            │  Campaign   │                      │
+│                            └──────┬──────┘                      │
+└───────────────────────────────────┼─────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                      SUB-AGENT LEVEL                            │
+│                                                                 │
+│                         MANAGER                                 │
+│                    (Cycle Coordinator)                          │
+│                            │                                    │
+│          ┌─────────────────┼─────────────────┐                  │
+│          ▼                 ▼                 ▼                  │
+│     ┌─────────┐      ┌─────────┐       ┌─────────┐              │
+│     │Emulator │      │ Analyst │       │ Teacher │              │
+│     └────┬────┘      └────┬────┘       └────┬────┘              │
+│          │                │                 │                   │
+│          │                ▼                 ▼                   │
+│          │           verdict          change_request            │
+│          │                │                 │                   │
+│          │                └────────┬────────┘                   │
+│          │                         ▼                            │
+│          │                    ┌─────────┐                       │
+│          │                    │  Tuner  │                       │
+│          │                    └────┬────┘                       │
+│          │                         │                            │
+│          ▼                         ▼                            │
+│     ┌─────────────────────────────────────────┐                 │
+│     │              MaaS (Ученик)              │                 │
+│     └─────────────────────────────────────────┘                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Компоненты системы
 
-| Компонент | Документ | Что делает | LLM? |
-|-----------|----------|------------|------|
-| **Мета-пользователь** | — | Владелец системы, задаёт цели | Человек |
-| **Manager** | [MANAGER.md](./MANAGER.md) | Мета-агент, координация проекта обучения | LLM + код |
-| **User Emulator** | [USER EMULATOR.md](./USER%20EMULATOR.md) | Генерация диалогов (Student ↔ Teacher agents) | LLM |
-| **Sensor** | — | Читает из MaaS, пишет в `sensor_events` | Код |
-| **Analyst** | [ANALYST.md](./ANALYST.md) | "Что не так?" — метрики, verdict, диагноз | LLM + SQL |
-| **Teacher** | [TEACHER.md](./TEACHER.md) | "Как исправить?" — гипотезы, новые импакты | LLM |
-| **Tuner** | [TUNER.md](./TUNER.md) | Версионирование параметров, rollback | Код |
-| **MaaS (Ученик)** | — | Предмет экспериментов | LLM |
+### Agent Level (стратегия)
+
+| Компонент | Документ | Что делает |
+|-----------|----------|------------|
+| **Мета-пользователь** | — | Владелец системы, задаёт Mission |
+| **Agent** | [AGENT.md](./AGENT.md) | Mission Controller: цели → campaigns, approval, отчёты |
+
+### Sub-Agent Level (тактика)
+
+| Компонент | Документ | Что делает |
+|-----------|----------|------------|
+| **Manager** | [MANAGER.md](./MANAGER.md) | Координатор циклов, оркестрирует sub-agents |
+| **Emulator** | [USER EMULATOR.md](./USER%20EMULATOR.md) | Генерация диалогов (Student ↔ Teacher agents) |
+| **Sensor** | — | Читает из MaaS, пишет в `sensor_events` |
+| **Analyst** | [ANALYST.md](./ANALYST.md) | "Что не так?" — метрики, verdict, диагноз |
+| **Teacher** | [TEACHER.md](./TEACHER.md) | "Как исправить?" — гипотезы, change_request |
+| **Tuner** | [TUNER.md](./TUNER.md) | Версионирование параметров, rollback |
 
 ### Разделение Analyst / Teacher
 
@@ -41,77 +94,99 @@
 
 ## Цикл обучения
 
+### Общий flow: Mission → Campaign → Cycles
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          LEARNING CYCLE                                  │
+│                           FULL FLOW                                      │
 │                                                                          │
-│  Мета-пользователь ──цели──► MANAGER ──отчёты──► Мета-пользователь      │
-│                                  │                                       │
-│                    ┌─────────────┼─────────────┐                         │
-│                    ▼             ▼             ▼                         │
-│             ┌──────────┐  ┌──────────┐  ┌──────────┐                     │
-│             │ Emulator │  │ Analyst  │  │ Teacher  │                     │
-│             └────┬─────┘  └────┬─────┘  └────┬─────┘                     │
-│                  │             │             │                           │
-│                  │             │             ▼                           │
-│                  │             │       ┌──────────┐                      │
-│                  │             │       │  Tuner   │                      │
-│                  │             │       └────┬─────┘                      │
-│                  │             │            │                            │
-│                  ▼             │            ▼                            │
-│           ┌───────────┐        │     impact_values                       │
-│           │   MaaS    │◄───────┴────────────┘                            │
-│           │ (Ученик)  │                                                  │
-│           └─────┬─────┘                                                  │
-│                 │                                                        │
-│                 ▼                                                        │
-│           ┌───────────┐                                                  │
-│           │  Sensor   │──────► sensor_events ──────► Analyst             │
-│           └───────────┘                                                  │
+│  Пользователь ──Mission──► AGENT ──approval──► Пользователь             │
+│                              │                                           │
+│                              ▼                                           │
+│                         Campaign                                         │
+│                              │                                           │
+│                              ▼                                           │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                    MANAGER (cycles)                              │    │
+│  │                                                                  │    │
+│  │   Emulator → MaaS → Sensor → Analyst → Teacher → Tuner → MaaS   │    │
+│  │        ↑                                                    │    │    │
+│  │        └────────────────────────────────────────────────────┘    │    │
+│  │                        (repeat until targets met)                │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+│                              │                                           │
+│                              ▼                                           │
+│                       CampaignResult                                     │
+│                              │                                           │
+│                              ▼                                           │
+│                           AGENT                                          │
+│                              │                                           │
+│                              ▼                                           │
+│               Next Campaign OR Mission Complete                          │
 │                                                                          │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Шаги цикла
+### Шаги цикла (внутри Manager)
 
 | Шаг | Что происходит |
 |-----|----------------|
-| 1 | Мета-пользователь → Manager: цели, targets, ограничения |
+| 1 | Agent → Manager: Campaign с targets, constraints, allowed_impacts |
 | 2 | Manager → Emulator: запуск эмуляции (N диалогов) |
 | 3 | Emulator → MaaS: Student ↔ Teacher agents диалогируют |
 | 4 | Sensor ← MaaS: съём данных в `sensor_events` |
-| 5 | Manager → Analyst: запрос анализа |
+| 5 | Manager → Analyst: запрос анализа batch |
 | 6 | **Analyst**: вычисление метрик, сравнение с targets, verdict |
-| 7 | Analyst → Teacher: verdict с диагнозом |
-| 8 | **Teacher**: генерация гипотезы, change_request |
-| 9 | Teacher → Tuner: применение изменений (с валидацией на Golden) |
-| 10 | Manager: проверка критерия остановки → goto 2 или завершение |
+| 7 | Manager: проверка gaps → если targets met → завершить Campaign |
+| 8 | Manager → Teacher: verdict с диагнозом, запрос гипотезы |
+| 9 | **Teacher**: генерация гипотезы, change_request |
+| 10 | Manager → Tuner: применение изменений (с валидацией на Golden) |
+| 11 | Manager: increment cycle → goto 2 или завершение |
+| 12 | Manager → Agent: CampaignResult |
 
 ---
 
 ## Артефакты
 
+### Agent Level
+
+| Артефакт | Тип | Кто использует |
+|----------|-----|----------------|
+| `missions` | Таблица БД | Agent пишет/читает |
+| `campaigns` | Таблица БД | Agent пишет, Manager читает |
+| `agent_decisions` | Таблица БД | Agent пишет (стратегические решения) |
+| `approval_requests` | Таблица БД | Agent пишет, Пользователь отвечает |
+
+### Sub-Agent Level
+
 | Артефакт | Тип | Кто использует |
 |----------|-----|----------------|
 | `sensor_events` | Таблица БД | Sensor пишет, Analyst читает |
-| `analysis_verdicts` | Таблица БД | Analyst пишет, Teacher читает |
+| `analysis_verdicts` | Таблица БД | Analyst пишет, Manager/Teacher читают |
 | `hypothesis_history` | Таблица БД | Teacher пишет/читает |
 | `impact_values` | Таблица БД | Tuner пишет, MaaS читает |
 | `parameter_history` | Таблица БД | Tuner пишет, Teacher читает |
+| `cycle_history` | Таблица БД | Manager пишет/читает |
 | scenarios/ | Файлы | User Emulator (train/validation/golden) |
 
 ---
 
 ## Тематические документы
 
-### Роли (кто что делает)
+### Agent Level
+
+| Файл | Отвечает на вопрос |
+|------|-------------------|
+| [AGENT.md](./AGENT.md) | Mission Controller: стратегические решения, campaigns, approvals |
+
+### Sub-Agent Level (роли)
 
 | Файл | Отвечает на вопрос |
 |------|-------------------|
 | [Системы и ролей.md](./Системы%20и%20ролей.md) | Обзор всех ролей и их взаимодействия |
-| [MANAGER.md](./MANAGER.md) | Мета-агент: как управляет проектом обучения |
+| [MANAGER.md](./MANAGER.md) | Координатор циклов: оркестрация sub-agents |
 | [ANALYST.md](./ANALYST.md) | "Что не так?" — метрики, verdict, диагноз |
-| [TEACHER.md](./TEACHER.md) | "Как исправить?" — гипотезы, новые импакты |
+| [TEACHER.md](./TEACHER.md) | "Как исправить?" — гипотезы, change_request |
 | [TUNER.md](./TUNER.md) | Как безопасно менять параметры |
 | [USER EMULATOR.md](./USER%20EMULATOR.md) | Как генерировать goal-oriented диалоги |
 
@@ -173,4 +248,5 @@ MaaS (pipeline_runs, raw_logs, lsm_storage)
 
 ---
 
-*Последнее обновление: 2025-11-26*
+*Последнее обновление: 2025-11-28*
+*Добавлена двухуровневая архитектура: Agent Level (Mission Controller) → Sub-Agent Level*
