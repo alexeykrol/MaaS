@@ -6,40 +6,49 @@
 
 ## 🔄 Текущее состояние
 
-> **🎉 MVP ЗАВЕРШЁН!**
+> **🎉 MVP ЗАВЕРШЁН! Emulator готов!**
 
 **Проект:** MaaS MVP (Memory as a Service)
-**Прогресс:** 100% (12/12 шагов)
-**Статус:** MVP COMPLETED
+**Прогресс:** MVP 100% + Emulator v0.3.1
+**Статус:** Фокус на качестве MaaS
 
-### ✅ Завершено (все 12 шагов):
-- Step 0: Подготовка (структура, зависимости, Supabase connection)
-- Step 1: База данных (6 таблиц, триггеры, seeds)
-- Step 2: Test Runner (engine + API + UI, mock mode)
-- Step 3: Orchestrator (LISTEN/NOTIFY, маршрутизация к агентам)
-- Step 4: Agent Stubs (идемпотентность, переходы статусов)
-- Step 5: Logger (уровни, timestamps, JSON)
-- Step 6: Real Analyzer (keyword search в LSM)
-- Step 7: Real Assembler (context building из LSM + raw_logs)
-- Step 8: Real FinalResponder (OpenAI gpt-4o-mini)
-- Step 9: Archivist (LLM суммаризация → LSM, tags extraction)
-- Step 10: Assembler v2 (token limits + priority scoring)
-- Step 11: Polish (retry logic + error handling)
+### ✅ Завершено:
 
-### 🔜 Следующий этап:
-- **Phase 2: Self-Learning System** — двухуровневая архитектура:
-  - **Agent Level:** Mission Controller (цели, campaigns, approvals)
-  - **Sub-Agent Level:** Manager → Emulator → Analyst → Teacher → Tuner
+**MVP (Steps 0-11):** Полный pipeline работает (NEW → COMPLETED)
 
-### 📐 Архитектура Self-Learning:
+**User Emulator v0.3.1:**
+- Pipeline Mode: оба роли роутятся через MaaS
+- Direct Mode: прямые вызовы OpenAI
+- Role Instructions: [ROLE INSTRUCTION: ...] в pipeline
+- localStorage Persistence: промпты сохраняются в браузере
+- Export to Markdown: экспорт диалогов
+
+**Analyzer v0.2:** LLM-based semantic keyword extraction
+
+**Orchestrator:** Интегрирован в server.ts (одна команда: `npm run dev`)
+
+### 🔍 Выводы тестирования:
+
+| Компонент | Статус |
+|-----------|--------|
+| Pipeline логистика | ✅ Работает |
+| Archivist | ✅ Сохраняет memories |
+| Analyzer | ✅ Находит memories |
+| Assembler | ✅ Включает в контекст |
+| **Memory Utilization** | ⚠️ Требует улучшения |
+
+### 🔜 Следующий фокус: MaaS Quality
+- Улучшение использования memories в ответах
+- Качество retrieval
+- "Adversarial" тесты (факт только в LSM)
+
+### 📐 Архитектура Self-Learning (отложено):
 ```
 Пользователь → AGENT → Campaign → MANAGER → cycle(Emulator→Analyst→Teacher→Tuner) → MaaS
 ```
 
-### 📊 Детали:
-- См. **docs/selflearn/AGENT.md** — стратегический уровень (Mission Controller)
-- См. **docs/selflearn/MANAGER.md** — тактический уровень (Cycle Coordinator)
-- См. **docs/selflearn/README.md** — обзор архитектуры
+### 📊 Документация:
+- См. **docs/selflearn/** — система самообучения
 
 ---
 
@@ -128,17 +137,19 @@
 
 ## 📦 Команды
 
-### npm scripts (package.json):
+### npm scripts (package.json v0.2.1):
 ```bash
-npm run dev          # Запустить HTTP сервер (Express)
-npm run orchestrator # Запустить Orchestrator (LISTEN/NOTIFY)
+npm run dev          # Запустить HTTP сервер + Orchestrator (всё в одной команде!)
 npm run test-runner  # Запустить Test Runner CLI
 npm run build        # Скомпилировать TypeScript
 npm run db:test      # Проверить подключение к БД
-npm run db:migrate   # Применить миграции
-npm run db:schema    # Применить schema.sql
-npm run db:seeds     # Применить seeds.sql
 ```
+
+**Endpoints при запуске:**
+- http://localhost:3000/ — API docs
+- http://localhost:3000/emulator — User Emulator UI
+- http://localhost:3000/test-runner — Test Runner UI
+- http://localhost:3000/health — Health check (показывает статус Orchestrator)
 
 ### Git команды:
 ```bash
@@ -161,20 +172,27 @@ git log --oneline -n 10       # Последние 10 коммитов
 - PascalCase для классов
 - UPPER_SNAKE_CASE для констант
 
-### Файловая структура:
+### Файловая структура (v0.2.0):
 ```
-src/
-├── agents/           # Агенты (Analyzer, Assembler, etc.)
-├── orchestrator/     # Orchestrator (LISTEN/NOTIFY)
-├── test-runner/      # Test Runner (engine, api, cli)
-├── utils/            # Утилиты (db.ts, logger.ts, openai.ts)
-├── server.ts         # HTTP сервер
-└── main.ts           # Entry point для Orchestrator
-
-Test/
-├── TEST_REGISTRY.md  # Реестр всех тестов (что тестируем)
-├── TEST_LOG.md       # История выполнения тестов
-└── scenarios/        # Детальные сценарии по модулям
+MaaS2/
+├── maas/                    # PRODUCT (deliverable)
+│   └── src/
+│       ├── agents/          # Analyzer, Assembler, FinalResponder, Archivist
+│       └── orchestrator/    # LISTEN/NOTIFY coordinator
+│
+├── learning-agent/          # TRAINING TOOL (not deliverable)
+│   └── emulator/            # Test Runner → User Emulator
+│       ├── src/             # engine.ts, api.ts, cli.ts
+│       └── public/          # UI
+│
+├── shared/                  # Common infrastructure
+│   ├── db.ts                # PostgreSQL connection
+│   ├── logger.ts            # Logging
+│   └── openai.ts            # OpenAI client
+│
+├── server.ts                # HTTP server entry point
+├── main.ts                  # Orchestrator entry point
+└── scripts/                 # Utility scripts
 ```
 
 ---
@@ -215,7 +233,7 @@ NOTIFY pipeline_events, '{"id": "...", "status": "NEW"}'
 ```
 
 ### Подключение:
-- Используй `src/utils/db.ts`
+- Используй `shared/db.ts`
 - SSL включен для Supabase
 - Connection pooling через `pg.Pool`
 
@@ -316,6 +334,14 @@ npm run dev              # Запустить сервер
 | **IMPACTS.md** | Импакт-факторы | При изменении параметров системы |
 | **METRICS.md** | Метрики системы | При работе с телеметрией |
 | **docs/selflearn/** | Система самообучения | При развитии self-learning |
+| **docs/memory/** | Архитектура памяти LSM | При изменении структуры памяти |
+
+### Memory документы (docs/memory/):
+| Файл | Назначение |
+|------|------------|
+| **LSM.md** | Основная спецификация памяти (требования + архитектура) |
+| **PACKING.md** | Алгоритм семантической упаковки |
+| **m_*.md** | Брейнсторминг-документы |
 
 ### Self-Learning документы (docs/selflearn/):
 | Файл | Уровень | Назначение |
@@ -330,5 +356,11 @@ npm run dev              # Запустить сервер
 
 ---
 
-*Последнее обновление: 2025-11-28*
-*Следующий этап: Phase 2 - Self-Learning System (двухуровневая архитектура)*
+*Последнее обновление: 2025-11-29 (v0.2.1)*
+*Следующий этап: MaaS Quality (улучшение использования memories)*
+
+### Изменения v0.2.1:
+- User Emulator v0.3.1: Pipeline/Direct modes, localStorage persistence
+- Orchestrator интегрирован в server.ts (одна команда)
+- Analyzer v0.2: LLM-based semantic keyword extraction
+- Выявлена проблема: LLM не всегда активно использует retrieved memories

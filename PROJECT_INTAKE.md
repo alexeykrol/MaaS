@@ -189,7 +189,7 @@ MaaS реализует многоуровневую систему памяти
 **Priority order (most important first):**
 
 1. **Event-Driven Pipeline** - PostgreSQL LISTEN/NOTIFY для координации модулей
-2. **Long-term Semantic Memory (LSM)** - хранение сжатых summary с тегами
+2. **Long-term Semantic Memory (LSM)** - хранение сжатых summary с тегами (см. [docs/memory/LSM.md](./docs/memory/LSM.md))
 3. **Analyzer Agent** - анализ запросов и поиск релевантного контекста
 4. **Assembler Agent** - сборка финального промпта с контекстом
 5. **Archivist Agent** - автоматическая архивация диалогов в LSM
