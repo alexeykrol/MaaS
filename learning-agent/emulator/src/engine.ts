@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
-import { pool } from '../utils/db';
-import { simpleQuery } from '../utils/openai';
+import { pool } from '../../../shared/db';
+import { simpleQuery } from '../../../shared/openai';
 
 /**
  * Test Runner Engine

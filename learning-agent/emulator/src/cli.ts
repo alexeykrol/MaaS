@@ -12,7 +12,7 @@
 
 import * as readline from 'readline';
 import { TestRunnerEngine, TestMode } from './engine';
-import { closePool } from '../utils/db';
+import { closePool } from '../../../shared/db';
 
 const rl = readline.createInterface({
   input: process.stdin,

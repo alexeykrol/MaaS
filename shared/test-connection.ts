@@ -2,24 +2,21 @@
 
 /**
  * Simple script to test Supabase connection
- * Run: npm run dev src/test-connection.ts
+ * Run: npm run db:test
  */
 
-import { testConnection, closePool } from './utils/db';
+import { testConnection, closePool } from './db';
 
 async function main() {
-  console.log('🔌 Testing Supabase PostgreSQL connection...\n');
+  console.log('Testing Supabase PostgreSQL connection...\n');
 
   const isConnected = await testConnection();
 
   if (isConnected) {
-    console.log('\n✅ Step 0: Project preparation complete!');
-    console.log('   - Project structure created');
-    console.log('   - Dependencies installed');
+    console.log('\nConnection successful!');
     console.log('   - Supabase connection verified');
-    console.log('\n📋 Next: Step 1 - Create database schema');
   } else {
-    console.log('\n❌ Connection failed. Please check:');
+    console.log('\nConnection failed. Please check:');
     console.log('   1. .env file exists (copy from .env.example)');
     console.log('   2. DATABASE_URL is correct');
     console.log('   3. Supabase project is running');

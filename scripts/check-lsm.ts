@@ -2,7 +2,7 @@
  * Check LSM Storage contents
  */
 
-import { pool } from '../src/utils/db';
+import { pool } from '../shared/db';
 
 async function checkLSM() {
   try {

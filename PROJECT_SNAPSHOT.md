@@ -1,6 +1,6 @@
 # PROJECT SNAPSHOT — Текущее состояние проекта
 
-*Последнее обновление: 2025-11-28*
+*Последнее обновление: 2025-11-29*
 
 > **Процесс обновления этого файла:** см. [`PROCESS.md`](./PROCESS.md)
 >
@@ -41,83 +41,76 @@
 
 ## Структура проекта
 
+> **v0.2.0:** Новая структура — чёткое разделение Product (MaaS) и Training Tool (Learning Agent)
+
 ```
 MaaS2/
-├── src/
-│   ├── agents/                    ✅ Steps 4-8
-│   │   └── index.ts               ✅ Analyzer, Assembler, FinalResponder
-│   ├── orchestrator/              ✅ Step 3
-│   │   └── index.ts               ✅ LISTEN/NOTIFY + routing
-│   ├── test-runner/               ✅ Step 2
-│   │   ├── engine.ts              ✅
-│   │   ├── api.ts                 ✅
-│   │   └── cli.ts                 ✅
-│   ├── utils/
-│   │   ├── db.ts                  ✅ Step 0
-│   │   ├── logger.ts              ✅ Step 5
-│   │   └── openai.ts              ✅ Step 8
-│   ├── server.ts                  ✅ Step 2
-│   ├── main.ts                    ✅ Step 3
-│   ├── test-connection.ts         ✅ Step 0
-│   ├── test-notify.ts             ✅ Step 3
-│   └── test-pipeline.ts           ✅ Step 3
-├── db/
-│   ├── schema.sql                 ✅ Step 1
-│   ├── seeds.sql                  ✅ Step 1
-│   └── run-migrations.ts          ✅ Step 1
-├── public/
-│   └── test-runner/
-│       └── index.html             ✅ Step 2
-├── Test/                          ✅ Test Framework
-│   ├── TEST_REGISTRY.md           ✅ Реестр всех тестов
-│   ├── TEST_LOG.md                ✅ История выполнения
-│   └── scenarios/                 ✅ Детальные сценарии
-│       ├── db-connection.md       ✅ Step 0
-│       ├── schema-seeds.md        ✅ Step 1
-│       ├── test-runner.md         ✅ Step 2
-│       ├── orchestrator.md        ✅ Step 3
-│       ├── agents.md              ✅ Step 4
-│       ├── logger.md              ✅ Step 5
-│       ├── analyzer.md            ✅ Step 6
-│       ├── assembler.md           ✅ Step 7
-│       ├── final-responder.md     ✅ Step 8
-│       └── archivist.md           ⏳ Step 9
-├── dist/                          ✅ (compiled)
-├── .env                           ✅ Configured
-├── .env.example                   ✅
-├── package.json                   ✅
-├── tsconfig.json                  ✅
+├── maas/                          # PRODUCT (deliverable)
+│   └── src/
+│       ├── agents/                ✅ Analyzer, Assembler, FinalResponder, Archivist
+│       │   └── index.ts
+│       └── orchestrator/          ✅ LISTEN/NOTIFY + routing
+│           └── index.ts
+│
+├── learning-agent/                # TRAINING TOOL (not deliverable)
+│   └── emulator/                  ✅ User Emulator v0.3.1
+│       ├── src/
+│       │   ├── engine.ts          ✅ Test scenarios engine
+│       │   ├── api.ts             ✅ REST API (Test Runner)
+│       │   ├── emulator-api.ts    ✅ Emulator API (direct/pipeline modes)
+│       │   └── cli.ts             ✅ CLI interface
+│       └── public/
+│           ├── index.html         ✅ Test Runner UI
+│           └── emulator.html      ✅ Emulator UI (localStorage persistence)
+│
+├── shared/                        # Common infrastructure
+│   ├── db.ts                      ✅ PostgreSQL connection pool
+│   ├── logger.ts                  ✅ Logging utility
+│   ├── openai.ts                  ✅ OpenAI API client
+│   └── test-connection.ts         ✅ DB connection test
+│
+├── scripts/                       # Utility scripts
+│   ├── check-lsm.ts               ✅
+│   ├── check-raw-logs.ts          ✅
+│   ├── test-end-to-end.ts         ✅
+│   └── ...                        ✅
+│
+├── db/                            # Database migrations
+│   ├── schema.sql                 ✅
+│   ├── seeds.sql                  ✅
+│   └── run-migrations.ts          ✅
+│
 ├── docs/
 │   └── selflearn/                 ✅ Self-Learning System docs
 │       ├── README.md              ✅ Overview + two-level architecture
-│       ├── AGENT.md               ✅ Mission Controller (Agent Level)
-│       ├── MANAGER.md             ✅ Cycle Coordinator (Sub-Agent Level)
-│       ├── ANALYST.md             ✅ "Что не так?" — metrics, verdict
-│       ├── TEACHER.md             ✅ "Как исправить?" — hypotheses
+│       ├── AGENT.md               ✅ Mission Controller
+│       ├── MANAGER.md             ✅ Cycle Coordinator
+│       ├── ANALYST.md             ✅ Metrics + verdict
+│       ├── TEACHER.md             ✅ Hypotheses
 │       ├── TUNER.md               ✅ Parameter management
 │       ├── USER EMULATOR.md       ✅ Dialog generation
-│       ├── CYCLES.md              ✅ Learning cycles (micro/macro/deep)
-│       ├── EXPERIMENTS.md         ✅ A/B testing structure
-│       ├── AUTONOMY.md            ✅ Parameter boundaries
-│       ├── GOLDEN_DATASET.md      ✅ Golden dataset structure
-│       └── Системы и ролей.md     ✅ Roles interaction diagram
-├── ARCHITECTURE.md                ✅
-├── BACKLOG.md                     ✅
-├── PIPELINE.md                    ✅
-├── ROADMAP.md                     ✅ Development roadmap (phases)
-├── METRICS.md                     ✅ Quality metrics definitions
-├── IMPACTS.md                     ✅ Tunable parameters
-├── README.md                      ✅
-├── CLAUDE.md                      ✅
-├── PROJECT_INTAKE.md              ✅
-├── PROJECT_SNAPSHOT.md            ✅ (this file)
-└── PROCESS.md                     ✅
+│       └── ...                    ✅
+│
+├── server.ts                      ✅ HTTP server entry point
+├── main.ts                        ✅ Orchestrator entry point
+├── package.json                   ✅ v0.2.0
+├── tsconfig.json                  ✅
+├── .env                           ✅
+└── [meta files]                   ✅ CLAUDE.md, BACKLOG.md, etc.
 
 Легенда:
 ✅ — реализовано и протестировано
 🔄 — в процессе разработки
 ⏳ — ожидает выполнения
 ```
+
+### Принцип разделения
+
+| Папка | Назначение | Деплоится? |
+|-------|------------|------------|
+| `maas/` | Product — ядро системы MaaS | ✅ Да |
+| `learning-agent/` | Training tool — обучение системы | ❌ Нет |
+| `shared/` | Общая инфраструктура | ✅ Да |
 
 ---
 
@@ -251,14 +244,15 @@ MaaS2/
 - `Test/TEST_REGISTRY.md` — реестр всех тестов (34 теста)
 - `Test/TEST_LOG.md` — история выполнения тестов
 
-### Команды:
+### Команды (v0.2.1):
 ```bash
-npm run dev          # Запустить HTTP сервер
-npm run orchestrator # Запустить Orchestrator
-npm run test-runner  # Запустить Test Runner CLI
+npm run dev          # Запустить HTTP сервер + Orchestrator (server.ts)
+npm run test-runner  # Запустить Test Runner CLI (learning-agent/emulator/src/cli.ts)
 npm run build        # Скомпилировать TypeScript
-npm run db:test      # Проверить подключение к БД
+npm run db:test      # Проверить подключение к БД (shared/test-connection.ts)
 ```
+
+> **Изменение v0.2.1:** Orchestrator теперь интегрирован в server.ts и запускается автоматически с `npm run dev`. Отдельная команда `npm run orchestrator` больше не нужна.
 
 ### Безопасность:
 - `.env` в `.gitignore` ✅
@@ -341,6 +335,48 @@ SUB-AGENT LEVEL
 ---
 
 ## История обновлений
+
+### 2025-11-29 - User Emulator v0.3.1 + Orchestrator Integration
+
+**User Emulator v0.3.1:**
+- ✅ **Pipeline Mode** — оба роли (Student/Mentor) роутятся через MaaS pipeline
+- ✅ **Direct Mode** — прямые вызовы OpenAI без памяти
+- ✅ **Role Instructions** — [ROLE INSTRUCTION: ...] передаётся в pipeline для сохранения ролей
+- ✅ **localStorage Persistence** — промпты, topic, mode сохраняются в браузере
+- ✅ **Reset to Defaults** — кнопка сброса настроек
+- ✅ **Export to Markdown** — экспорт диалогов для анализа
+
+**Orchestrator Integration:**
+- ✅ Orchestrator интегрирован в server.ts (одна команда: `npm run dev`)
+- ✅ Graceful shutdown при SIGINT/SIGTERM
+- ✅ Health endpoint показывает статус Orchestrator
+
+**Analyzer v0.2:**
+- ✅ LLM-based semantic keyword extraction (вместо простого split)
+- ✅ Улучшенный retrieval из LSM
+
+**Выводы тестирования:**
+- Pipeline логистика работает корректно (NEW → ANALYZING → ... → COMPLETED)
+- Archivist сохраняет memories в LSM
+- Analyzer находит memories по semantic keywords
+- Assembler включает memories в контекст
+- **Качество использования memories требует улучшения** — LLM не всегда активно использует retrieved context
+
+**Следующий фокус:** MaaS качество (memory retrieval, context utilization)
+
+---
+
+### 2025-11-28 - Project Restructuring v0.2.0
+- **Новая структура папок** — чёткое разделение Product и Training Tool:
+  - `maas/` — Product (deliverable): agents, orchestrator
+  - `learning-agent/` — Training tool (not deliverable): emulator, sensor, analyst, teacher, tuner
+  - `shared/` — Common infrastructure: db, logger, openai
+- Entry points перемещены в корень: `server.ts`, `main.ts`
+- Обновлены все импорты в модулях
+- Обновлены scripts (check-lsm.ts, test-end-to-end.ts, etc.)
+- Обновлён `tsconfig.json` для новой структуры
+- Обновлён `package.json` (v0.2.0, новые пути)
+- Удалена старая папка `src/`
 
 ### 2025-11-28 - Vertical Slice Approach
 - Переструктурирован BACKLOG.md с подходом "Make it work, then make it good"

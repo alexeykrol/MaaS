@@ -5,7 +5,7 @@
  * для тестирования Analyzer с реальной БД
  */
 
-import { pool } from '../src/utils/db';
+import { pool } from '../shared/db';
 
 async function seedLSM() {
   try {

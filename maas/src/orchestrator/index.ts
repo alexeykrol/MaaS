@@ -1,6 +1,6 @@
 import { Client } from 'pg';
-import { pool } from '../utils/db';
-import { logger } from '../utils/logger';
+import { pool } from '../../../shared/db';
+import { logger } from '../../../shared/logger';
 import { runAnalyzer, runAssembler, runFinalResponder, runArchivist } from '../agents';
 
 /**

@@ -14,9 +14,9 @@
  *    - Пометить логи как processed
  */
 
-import { pool } from '../src/utils/db';
-import { logger } from '../src/utils/logger';
-import { createChatCompletion } from '../src/utils/openai';
+import { pool } from '../shared/db';
+import { logger } from '../shared/logger';
+import { createChatCompletion } from '../shared/openai';
 
 interface RawLog {
   id: string;

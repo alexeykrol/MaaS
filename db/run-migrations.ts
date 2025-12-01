@@ -12,7 +12,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { pool, closePool } from '../src/utils/db';
+import { pool, closePool } from '../shared/db';
 
 const SCHEMA_FILE = path.join(__dirname, 'schema.sql');
 const SEEDS_FILE = path.join(__dirname, 'seeds.sql');

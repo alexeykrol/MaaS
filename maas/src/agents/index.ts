@@ -8,9 +8,9 @@
  * Все агенты полностью функциональны и протестированы.
  */
 
-import { pool } from '../utils/db';
-import { logger } from '../utils/logger';
-import { createChatCompletion } from '../utils/openai';
+import { pool } from '../../../shared/db';
+import { logger } from '../../../shared/logger';
+import { createChatCompletion } from '../../../shared/openai';
 
 /**
  * Helper: Sleep function
@@ -54,8 +54,8 @@ export async function runAnalyzer(pipelineId: string): Promise<void> {
     const run = result.rows[0];
     logger.info(`[Analyzer] Processing query: "${run.user_query.substring(0, 50)}..."`);
 
-    // Extract keywords from query
-    const keywords = extractSimpleKeywords(run.user_query);
+    // Extract semantic keywords using LLM (v0.2)
+    const keywords = await extractSemanticKeywords(run.user_query);
     logger.info(`[Analyzer] Extracted keywords: [${keywords.join(', ')}]`);
 
     // Search LSM for relevant memories (v0.1: keyword-based search)
@@ -104,13 +104,61 @@ export async function runAnalyzer(pipelineId: string): Promise<void> {
 }
 
 /**
- * Extract simple keywords from query (v0.1 - basic implementation)
+ * Extract semantic keywords from query using LLM (v0.2)
  *
- * TODO v0.2: Use OpenAI for better extraction
- * TODO v0.3: Use embeddings for semantic search
+ * Uses AI to understand the semantic meaning and extract
+ * relevant topic tags that would match stored memories.
+ */
+async function extractSemanticKeywords(query: string): Promise<string[]> {
+  try {
+    const response = await createChatCompletion({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a keyword extractor. Given a user query, extract 3-7 semantic topic tags that capture the main concepts.
+
+Rules:
+- Output ONLY a JSON array of lowercase strings
+- Include both specific terms AND broader topic categories
+- Think about what topics this query relates to
+- Include synonyms and related concepts
+
+Example:
+Query: "How does factorial work in recursion?"
+Output: ["factorial", "recursion", "mathematics", "programming", "functions", "algorithms"]
+
+Query: "What's the call stack?"
+Output: ["call stack", "stack", "memory", "programming", "functions", "execution"]`
+        },
+        {
+          role: 'user',
+          content: query
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 100
+    });
+
+    // Parse JSON array from response
+    const match = response.match(/\[[\s\S]*\]/);
+    if (match) {
+      const tags = JSON.parse(match[0]);
+      logger.info(`[Analyzer] LLM extracted tags: [${tags.join(', ')}]`);
+      return tags;
+    }
+  } catch (error) {
+    logger.warn(`[Analyzer] LLM extraction failed, falling back to simple:`, error);
+  }
+
+  // Fallback to simple extraction
+  return extractSimpleKeywords(query);
+}
+
+/**
+ * Simple keyword extraction (fallback)
  */
 function extractSimpleKeywords(query: string): string[] {
-  // Простая экстракция: убрать стоп-слова, взять уникальные
   const stopWords = ['the', 'a', 'an', 'is', 'are', 'was', 'were', 'what', 'how', 'when', 'where', 'why', 'to', 'for', 'of', 'in', 'on', 'at'];
 
   const words = query.toLowerCase()
@@ -118,7 +166,7 @@ function extractSimpleKeywords(query: string): string[] {
     .split(/\s+/)
     .filter(w => w.length > 2 && !stopWords.includes(w));
 
-  return [...new Set(words)]; // Unique words
+  return [...new Set(words)];
 }
 
 /**

@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MaaS MVP - Test Runner</title>
+    <style>
+        /* Retro Terminal Theme */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            padding: 20px;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            border: 2px solid #0f0;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header .subtitle {
+            color: #0a0;
+            font-size: 12px;
+        }
+
+        /* Mode Toggle */
+        .mode-toggle {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #0a0;
+        }
+
+        .mode-toggle button {
+            background: #000;
+            color: #0f0;
+            border: 2px solid #0f0;
+            padding: 8px 20px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 0 5px;
+        }
+
+        .mode-toggle button:hover {
+            background: #0f0;
+            color: #000;
+        }
+
+        .mode-toggle button.active {
+            background: #0a0;
+            color: #000;
+        }
+
+        .mode-help {
+            margin-top: 10px;
+            font-size: 11px;
+            color: #0a0;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Scenarios Section */
+        .section {
+            border: 2px solid #0f0;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #0a0;
+        }
+
+        /* Scenario List */
+        .scenario-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .scenario-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #0a0;
+            background: #001a00;
+        }
+
+        .scenario-info {
+            flex: 1;
+        }
+
+        .scenario-id {
+            font-size: 11px;
+            color: #0a0;
+            margin-bottom: 3px;
+        }
+
+        .scenario-desc {
+            font-size: 13px;
+        }
+
+        .run-btn {
+            background: #000;
+            color: #0f0;
+            border: 2px solid #0f0;
+            padding: 8px 20px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .run-btn:hover {
+            background: #0f0;
+            color: #000;
+        }
+
+        .run-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Results Table */
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .results-table th,
+        .results-table td {
+            border: 1px solid #0a0;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .results-table th {
+            background: #001a00;
+            font-weight: bold;
+        }
+
+        .results-table tr:hover {
+            background: #000d00;
+        }
+
+        .status-passed {
+            color: #0f0;
+        }
+
+        .status-failed {
+            color: #f00;
+        }
+
+        .status-running {
+            color: #ff0;
+        }
+
+        /* Loading Indicator */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: #ff0;
+            font-size: 16px;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        /* Summary */
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .summary-card {
+            border: 1px solid #0a0;
+            padding: 10px;
+            text-align: center;
+            background: #001a00;
+        }
+
+        .summary-value {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .summary-label {
+            font-size: 11px;
+            color: #0a0;
+        }
+
+        /* Error Display */
+        .error {
+            background: #1a0000;
+            border: 2px solid #f00;
+            color: #f00;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error.active {
+            display: block;
+        }
+
+        /* Scrollable Answer */
+        .answer-cell {
+            max-width: 400px;
+            max-height: 60px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #000;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #0a0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>╔═══════════════════════════════════╗</h1>
+            <h1>║  MaaS MVP - TEST RUNNER v1.0.0  ║</h1>
+            <h1>╚═══════════════════════════════════╝</h1>
+            <div class="subtitle">Event-Driven AI Mentor Test Framework</div>
+        </div>
+
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+            <div style="margin-bottom: 10px;">
+                <span>Test Mode: </span>
+                <button id="mock-mode-btn" class="active" data-mode="mock">MOCK</button>
+                <button id="direct-mode-btn" data-mode="direct">DIRECT</button>
+                <button id="full-mode-btn" data-mode="full">FULL</button>
+                <span style="margin-left: 20px; color: #0a0;">
+                    <span id="current-mode-display">MOCK</span>
+                    <span style="font-size: 11px;"> (Current)</span>
+                </span>
+            </div>
+            <div class="mode-help">
+                <strong>MOCK:</strong> Simulated responses (no OpenAI) │
+                <strong>DIRECT:</strong> OpenAI without memory (baseline) │
+                <strong>FULL:</strong> Complete pipeline with memory (real system)
+            </div>
+        </div>
+
+        <!-- Error Display -->
+        <div id="error" class="error"></div>
+
+        <!-- Scenarios Section -->
+        <div class="section">
+            <div class="section-title">▶ TEST SCENARIOS</div>
+            <div id="scenario-list" class="scenario-list">
+                <div class="loading active">Loading scenarios...</div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results-section" class="section" style="display: none;">
+            <div class="section-title">▶ TEST RESULTS</div>
+
+            <!-- Summary -->
+            <div class="summary">
+                <div class="summary-card">
+                    <div class="summary-value" id="total-steps">0</div>
+                    <div class="summary-label">TOTAL STEPS</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value status-passed" id="passed-steps">0</div>
+                    <div class="summary-label">PASSED</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-value status-failed" id="failed-steps">0</div>
+                    <div class="summary-label">FAILED</div>
+                </div>
+            </div>
+
+            <!-- Results Table -->
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th style="width: 60px;">STEP</th>
+                        <th style="width: 100px;">STATUS</th>
+                        <th>ANSWER</th>
+                        <th style="width: 200px;">VALIDATION</th>
+                        <th style="width: 100px;">DURATION</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/test-runner';
+        let currentMode = 'MOCK';
+
+        // Initialize
+        async function init() {
+            await loadScenarios();
+            setupModeToggle();
+        }
+
+        // Load scenarios from API
+        async function loadScenarios() {
+            try {
+                const response = await fetch(`${API_BASE}/scenarios`);
+                const data = await response.json();
+
+                if (!data.success) {
+                    showError(data.error);
+                    return;
+                }
+
+                renderScenarios(data.scenarios);
+            } catch (error) {
+                showError(`Failed to load scenarios: ${error.message}`);
+            }
+        }
+
+        // Render scenario list
+        function renderScenarios(scenarios) {
+            const list = document.getElementById('scenario-list');
+            list.innerHTML = '';
+
+            scenarios.forEach(scenario => {
+                const item = document.createElement('div');
+                item.className = 'scenario-item';
+                item.innerHTML = `
+                    <div class="scenario-info">
+                        <div class="scenario-id">ID: ${scenario.id}</div>
+                        <div class="scenario-desc">${scenario.description}</div>
+                    </div>
+                    <button class="run-btn" onclick="runScenario('${scenario.id}')">
+                        RUN ▶
+                    </button>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        // Run a scenario
+        async function runScenario(scenarioId) {
+            // Disable all run buttons
+            document.querySelectorAll('.run-btn').forEach(btn => btn.disabled = true);
+
+            // Clear previous results
+            clearResults();
+            document.getElementById('results-section').style.display = 'block';
+
+            // Show loading
+            const resultsBody = document.getElementById('results-body');
+            resultsBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #ff0;">Running tests...</td></tr>';
+
+            try {
+                const response = await fetch(`${API_BASE}/run/${scenarioId}`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+
+                if (!data.success) {
+                    showError(data.error);
+                    return;
+                }
+
+                renderResults(data);
+            } catch (error) {
+                showError(`Failed to run scenario: ${error.message}`);
+            } finally {
+                // Re-enable run buttons
+                document.querySelectorAll('.run-btn').forEach(btn => btn.disabled = false);
+            }
+        }
+
+        // Render test results
+        function renderResults(data) {
+            // Update summary
+            document.getElementById('total-steps').textContent = data.summary.total;
+            document.getElementById('passed-steps').textContent = data.summary.passed;
+            document.getElementById('failed-steps').textContent = data.summary.failed;
+
+            // Update results table
+            const tbody = document.getElementById('results-body');
+            tbody.innerHTML = '';
+
+            data.results.forEach(result => {
+                const row = document.createElement('tr');
+                const statusClass = result.status === 'PASSED' ? 'status-passed' : 'status-failed';
+
+                row.innerHTML = `
+                    <td>${result.step}</td>
+                    <td class="${statusClass}">${result.status === 'PASSED' ? '✓' : '✗'} ${result.status}</td>
+                    <td class="answer-cell">${escapeHtml(result.final_answer || result.error_message || 'N/A')}</td>
+                    <td>${escapeHtml(result.validation?.reason || 'N/A')}</td>
+                    <td>${result.duration_ms ? result.duration_ms + 'ms' : 'N/A'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Clear results
+        function clearResults() {
+            document.getElementById('total-steps').textContent = '0';
+            document.getElementById('passed-steps').textContent = '0';
+            document.getElementById('failed-steps').textContent = '0';
+            document.getElementById('results-body').innerHTML = '';
+            hideError();
+        }
+
+        // Setup mode toggle
+        function setupModeToggle() {
+            const mockBtn = document.getElementById('mock-mode-btn');
+            const directBtn = document.getElementById('direct-mode-btn');
+            const fullBtn = document.getElementById('full-mode-btn');
+
+            mockBtn.addEventListener('click', () => setMode('mock'));
+            directBtn.addEventListener('click', () => setMode('direct'));
+            fullBtn.addEventListener('click', () => setMode('full'));
+        }
+
+        // Set test mode
+        async function setMode(mode) {
+            try {
+                const response = await fetch(`${API_BASE}/mode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: mode })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    currentMode = mode.toUpperCase();
+
+                    // Update button states
+                    document.getElementById('mock-mode-btn').classList.toggle('active', mode === 'mock');
+                    document.getElementById('direct-mode-btn').classList.toggle('active', mode === 'direct');
+                    document.getElementById('full-mode-btn').classList.toggle('active', mode === 'full');
+
+                    // Update mode display
+                    document.getElementById('current-mode-display').textContent = currentMode;
+                }
+            } catch (error) {
+                showError(`Failed to set mode: ${error.message}`);
+            }
+        }
+
+        // Show error
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = `ERROR: ${message}`;
+            errorDiv.classList.add('active');
+        }
+
+        // Hide error
+        function hideError() {
+            const errorDiv = document.getElementById('error');
+            errorDiv.classList.remove('active');
+        }
+
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>

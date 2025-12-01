@@ -4,7 +4,7 @@
  * Проверяет, как Assembler собрал контекст в последних запросах
  */
 
-import { pool } from '../src/utils/db';
+import { pool } from '../shared/db';
 
 async function checkContext() {
   try {

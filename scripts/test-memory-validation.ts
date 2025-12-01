@@ -5,7 +5,7 @@
  * а не просто формирует правильный контекст.
  */
 
-import { pool } from '../src/utils/db';
+import { pool } from '../shared/db';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 

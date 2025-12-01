@@ -4,7 +4,7 @@
  * Создает тестовый запрос и проверяет, что контекст собирается по format.md
  */
 
-import { pool } from '../src/utils/db';
+import { pool } from '../shared/db';
 
 async function testContextGeneration() {
   try {

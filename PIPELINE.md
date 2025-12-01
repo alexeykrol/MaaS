@@ -4,7 +4,7 @@
 1. [Обзор Pipeline](#обзор-pipeline)
 2. [State Machine](#state-machine)
 3. [Основной цикл обработки запроса](#основной-цикл-обработки-запроса)
-4. [Фоновый цикл архивирования](#фоновый-цикл-архивирования)
+4. [Синхронный цикл Archivist](#синхронный-цикл-archivist)
 5. [Триггеры и события](#триггеры-и-события)
 6. [Обработка ошибок](#обработка-ошибок)
 7. [Идемпотентность и конкурентность](#идемпотентность-и-конкурентность)
@@ -13,21 +13,26 @@
 
 ## Обзор Pipeline
 
-Система MaaS состоит из двух независимых потоков:
+Система MaaS работает как **синхронный блокирующий цикл**:
 
-### **Быстрый путь (Fast Path)** - Ответ пользователю
+### **Единый цикл запроса** (4 LLM-вызова)
 ```
-User Query → Response
-Время: 3-10 секунд
-Приоритет: Высокий
+User Query → [Archivist Signal 1] → Analyzer → Assembler(LLM) → FinalResponder → [Archivist Signal 2] → БЛОК
+                    ↓                                                                    ↓
+              запись в LSM                                                         суммаризация → LSM
+                                                                                        ↓
+                                                                            СЛЕДУЮЩИЙ ЗАПРОС ЖДЁТ
 ```
 
-### **Медленный путь (Slow Path)** - Обработка памяти
-```
-Raw Logs → LSM Storage
-Время: Фоновая задача
-Приоритет: Низкий
-```
+### **Время цикла**: 5-15 секунд
+- Analyzer: 1-3 сек (LLM)
+- Assembler: 1-2 сек (LLM)
+- FinalResponder: 2-8 сек (LLM)
+- Archivist Signal 2: 1-3 сек (LLM суммаризация)
+
+### **Принцип блокировки**
+Следующий запрос **НЕ начинается** пока Archivist не завершит суммаризацию.
+Это гарантирует консистентность LSM — человек не отвечает мгновенно, и модель тоже может подождать.
 
 ---
 
@@ -234,20 +239,20 @@ pg_notify('pipeline_events', {
 
 ---
 
-### Шаг 2: Сборка контекста
+### Шаг 2: Сборка контекста (двухэтапная)
 
-**Участники**: Orchestrator → Assembler
+**Участники**: Orchestrator → Draft Builder (код) → Assembler (LLM)
 
 ```
 ┌──────────────┐
 │ Orchestrator │◄── NOTIFY { id, status='ANALYZED' }
 └──────┬───────┘
        │ switch(status):
-       │   case 'ANALYZED': runAssembler(id)
+       │   case 'ANALYZED': runContextAssembly(id)
        ↓
-┌──────────────┐
-│  Assembler   │
-└──────┬───────┘
+╔══════════════════════════════════════════════════════════════════════╗
+║                    ЭТАП 2.1: DRAFT BUILDER (КОД)                     ║
+╠══════════════════════════════════════════════════════════════════════╣
        │
        │ 1. Идемпотентный захват
        ↓
@@ -258,64 +263,71 @@ WHERE id = ${id}
 RETURNING *
        │
        ↓
-       │ 2. Читаем данные запроса
+       │ 2. Собираем 4 элемента драфта:
+       │
+       │ ┌─────────────────────────────────────────────────────────┐
+       │ │  ЭЛЕМЕНТ 1: Исходный запрос                            │
+       │ │  └─ SELECT user_query FROM pipeline_runs WHERE id=$id  │
+       │ ├─────────────────────────────────────────────────────────┤
+       │ │  ЭЛЕМЕНТ 2: Исторический контекст                      │
+       │ │  ├─ 2.1: Последние 10 инференсов из raw_logs           │
+       │ │  │       SELECT * FROM raw_logs WHERE user_id=$uid     │
+       │ │  │       ORDER BY created_at DESC LIMIT 10             │
+       │ │  └─ 2.2: Фокусированный контекст (analysis_result)     │
+       │ │          + полные данные из lsm_storage                │
+       │ ├─────────────────────────────────────────────────────────┤
+       │ │  ЭЛЕМЕНТ 3: Промпт роли                                │
+       │ │  └─ SELECT prompt_template FROM system_prompts         │
+       │ │     WHERE role_name = 'Mentor'                         │
+       │ ├─────────────────────────────────────────────────────────┤
+       │ │  ЭЛЕМЕНТ 4: Промпт Ассемблера                          │
+       │ │  └─ SELECT prompt_template FROM system_prompts         │
+       │ │     WHERE role_name = 'Assembler'                      │
+       │ └─────────────────────────────────────────────────────────┘
+       │
        ↓
-SELECT
-    user_query,
-    analysis_result
-FROM pipeline_runs
+       │ 3. Механическая конкатенация → ДРАФТ
+       ↓
+draft_context = concatenate(element1, element2, element3, element4)
+       │
+       ↓
+UPDATE pipeline_runs
+SET draft_context = ${draft_context}
 WHERE id = ${id}
        │
-       ↓
-       │ 3. Если найден контекст → читаем полные данные из LSM
-       ↓
-IF analysis_result.context_found.lsm_record_id:
-    SELECT summary
-    FROM lsm_storage
-    WHERE id = ${lsm_record_id}
+╚══════════════════════════════════════════════════════════════════════╝
        │
        ↓
-       │ 4. Читаем промпты
+╔══════════════════════════════════════════════════════════════════════╗
+║                    ЭТАП 2.2: ASSEMBLER (LLM)                         ║
+╠══════════════════════════════════════════════════════════════════════╣
+       │
+       │ 4. Вызов LLM для оптимизации драфта
        ↓
-SELECT prompt_template
-FROM system_prompts
-WHERE role_name IN ('Assembler', 'FinalResponder')
+LLM API Call:
+  prompt: ${assembler_prompt} (element 4)
+  input: ${draft_context}
+  task: "Оптимизируй драфт → финальный контекст"
+       │
+       │ LLM делает:
+       │ - Убирает нерелевантное
+       │ - Фокусирует на текущем запросе
+       │ - Структурирует с XML-тегами
+       │ - Соблюдает token limit (8000)
+       ↓
+final_context_payload = llm_response
        │
        ↓
-       │ 5. Собираем "пирог контекста"
-       ↓
-final_context = `
-<system>
-${finalResponderPrompt}
-</system>
-
-${if context_found:}
-<context_from_history>
-Период: ${period}
-${lsm_summary}
-</context_from_history>
-${endif}
-
-<current_query>
-${user_query}
-</current_query>
-`
-       │
-       ↓
-       │ 6. Проверяем token budget (опционально)
-       ↓
-IF tokenCount(final_context) > MAX_TOKENS:
-    Сократить summary
-       │
-       ↓
-       │ 7. Сохраняем результат
+       │ 5. Сохраняем финальный контекст
        ↓
 UPDATE pipeline_runs
 SET
-    final_context_payload = ${final_context},
+    final_context_payload = ${final_context_payload},
     status = 'READY',
     updated_at = NOW()
 WHERE id = ${id}
+       │
+╚══════════════════════════════════════════════════════════════════════╝
        │
        ↓
 PostgreSQL TRIGGER:
@@ -325,7 +337,10 @@ pg_notify('pipeline_events', {
 })
 ```
 
-**Время**: ~200-500ms
+**Время**:
+- Этап 2.1 (Draft Builder): ~100-200ms (только SQL)
+- Этап 2.2 (Assembler LLM): ~1-2 секунды
+- **Итого**: ~1.5-2.5 секунды
 
 ---
 
@@ -458,98 +473,113 @@ User подключен к WS: /api/ws
 
 ---
 
-## Фоновый цикл архивирования
+## Синхронный цикл Archivist
 
-### Независимый процесс: Archivist
+### Archivist работает в 2 сигналах (не фоновый!)
+
+> **ВАЖНО:** Archivist — синхронный модуль, интегрированный в основной цикл запроса.
+> Следующий запрос **блокируется** до завершения суммаризации.
 
 ```
-┌─────────────┐
-│ Cron / Timer│
-└──────┬──────┘
-       │ Запуск по расписанию (например, каждые 6 часов)
-       │ ИЛИ ручной запуск: npm run archivist
-       ↓
-┌──────────────┐
-│  Archivist   │
-└──────┬───────┘
-       │
-       │ 1. Определяем период для обработки
-       ↓
-period_start = NOW() - INTERVAL '1 day'
-period_end = NOW()
-       │
-       ↓
-       │ 2. Читаем необработанные логи
-       ↓
-SELECT id, user_id, message_type, content, created_at
-FROM raw_logs
-WHERE created_at BETWEEN ${period_start} AND ${period_end}
-  AND id NOT IN (
-      SELECT unnest(raw_log_ids)
-      FROM lsm_storage
-  )
-ORDER BY created_at
-       │
-       ↓
-       │ Если нет новых логов → EXIT
-       │ Если есть → продолжаем
-       ↓
-       │ 3. Группируем диалоги
-       ↓
-dialogues = groupByUserAndThread(raw_logs)
-       │
-       ↓
-       │ 4. Читаем промпт Архивариуса
-       ↓
-SELECT prompt_template
-FROM system_prompts
-WHERE role_name = 'Archivist'
-       │
-       ↓
-       │ 5. Для каждой группы вызываем LLM
-       ↓
-FOR EACH dialogue IN dialogues:
-
-    LLM API Call:
-      prompt: ${archivist_prompt}
-      input: {
-          start_date: ${period_start},
-          end_date: ${period_end},
-          raw_logs: ${dialogue.messages}
-      }
-
-    lsm_record = parse_json(llm_response)
-
-    │
-    ↓
-    │ 6. Сохраняем в LSM
-    ↓
-    INSERT INTO lsm_storage (
-        time_bucket_start,
-        time_bucket_end,
-        tags,
-        summary,
-        raw_log_ids
-    ) VALUES (
-        ${lsm_record.time_bucket_start},
-        ${lsm_record.time_bucket_end},
-        ${lsm_record.tags},
-        ${lsm_record.summary},
-        ${dialogue.log_ids}
-    )
-       │
-       ↓
-END LOOP
-       │
-       ↓
-LOG: "Processed ${count} dialogues, created ${count} LSM records"
+┌─────────────────────────────────────────────────────────────────────┐
+│                    ЦИКЛ ОБРАБОТКИ ЗАПРОСА                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌─────────────────┐                                                 │
+│  │ SIGNAL 1        │ ◄── При получении запроса                       │
+│  │ (начало цикла)  │                                                 │
+│  └────────┬────────┘                                                 │
+│           │                                                          │
+│           │ Быстрая запись запроса в LSM                             │
+│           │ (без LLM вызова, просто INSERT)                         │
+│           ↓                                                          │
+│  ┌─────────────────┐                                                 │
+│  │ Analyzer (LLM)  │                                                 │
+│  └────────┬────────┘                                                 │
+│           ↓                                                          │
+│  ┌─────────────────┐                                                 │
+│  │ Assembler (LLM) │                                                 │
+│  └────────┬────────┘                                                 │
+│           ↓                                                          │
+│  ┌─────────────────┐                                                 │
+│  │ FinalResponder  │                                                 │
+│  │ (LLM)           │                                                 │
+│  └────────┬────────┘                                                 │
+│           ↓                                                          │
+│  ┌─────────────────┐                                                 │
+│  │ SIGNAL 2        │ ◄── После получения ответа                      │
+│  │ (конец цикла)   │                                                 │
+│  └────────┬────────┘                                                 │
+│           │                                                          │
+│           │ LLM суммаризация диалога → INSERT в lsm_storage          │
+│           │ Время: 1-3 секунды                                       │
+│           ↓                                                          │
+│  ┌─────────────────┐                                                 │
+│  │ БЛОКИРОВКА      │                                                 │
+│  │ СНЯТА           │                                                 │
+│  └─────────────────┘                                                 │
+│           ↓                                                          │
+│  Следующий запрос может начаться                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Время**: Зависит от объема (может работать часами для большого архива)
+### Signal 1: Запись запроса (быстро)
 
-**Частота запуска**:
-- MVP: вручную или 1 раз в сутки
-- Production: каждые 6-12 часов
+```javascript
+// При получении нового запроса
+async function archivistSignal1(userId, query, pipelineRunId) {
+    // Быстрая запись в raw_logs (не LSM!)
+    await pool.query(`
+        INSERT INTO raw_logs (user_id, log_type, log_data)
+        VALUES ($1, 'USER_QUERY', $2)
+    `, [userId, JSON.stringify({ query, pipeline_run_id: pipelineRunId })]);
+
+    // Время: ~10-50ms (без LLM)
+}
+```
+
+### Signal 2: Суммаризация после ответа (LLM)
+
+```javascript
+// После получения final_answer
+async function archivistSignal2(userId, query, answer, pipelineRunId) {
+    // 1. Читаем промпт Архивариуса
+    const promptResult = await pool.query(`
+        SELECT prompt_template FROM system_prompts
+        WHERE role_name = 'Archivist'
+    `);
+
+    // 2. Вызываем LLM для суммаризации
+    const summary = await callLLM({
+        prompt: promptResult.rows[0].prompt_template,
+        input: {
+            query,
+            answer,
+            timestamp: new Date().toISOString()
+        }
+    });
+
+    // 3. Записываем в LSM
+    await pool.query(`
+        INSERT INTO lsm_storage (time_bucket_start, time_bucket_end, tags, summary, raw_log_ids)
+        VALUES ($1, $2, $3, $4, $5)
+    `, [today, today, summary.tags, summary.text, [pipelineRunId]]);
+
+    // Время: 1-3 секунды (LLM вызов)
+}
+```
+
+### Почему синхронный?
+
+| Async подход | Sync подход (выбран) |
+|--------------|----------------------|
+| Следующий запрос начинается сразу | Следующий запрос ждёт |
+| LSM может быть неконсистентным | LSM всегда актуален |
+| Сложная логика конфликтов | Простая логика |
+| Race conditions | Нет race conditions |
+| Быстрее отклик | Задержка 1-3 сек |
+
+**Вывод:** Консистентность LSM важнее скорости. Человек всё равно думает несколько секунд перед следующим вопросом.
 
 ---
 

@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Emulator | MaaS Learning Agent</title>
+  <style>
+    :root {
+      --bg-dark: #0d1117;
+      --bg-panel: #161b22;
+      --bg-input: #21262d;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --text-dim: #8b949e;
+      --accent: #58a6ff;
+      --student: #a371f7;
+      --mentor: #3fb950;
+      --warning: #d29922;
+      --error: #f85149;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+      background: var(--bg-dark);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h1 {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    .status-badge {
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+    }
+
+    .status-badge.running {
+      background: rgba(63, 185, 80, 0.15);
+      border-color: var(--mentor);
+      color: var(--mentor);
+    }
+
+    .status-badge.completed {
+      background: rgba(88, 166, 255, 0.15);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr 300px;
+      gap: 16px;
+      height: calc(100vh - 80px);
+    }
+
+    /* Panels */
+    .panel {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .panel-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+    }
+
+    /* Config Panel */
+    .config-section {
+      margin-bottom: 16px;
+    }
+
+    .config-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .config-title {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .config-title .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .config-title .dot.student { background: var(--student); }
+    .config-title .dot.mentor { background: var(--mentor); }
+
+    label {
+      display: block;
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 11px;
+      padding: 6px 8px;
+      margin-bottom: 8px;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .input-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #79b8ff;
+    }
+
+    .btn-primary:disabled {
+      background: var(--bg-input);
+      color: var(--text-dim);
+      cursor: not-allowed;
+    }
+
+    .btn-stop {
+      background: var(--error);
+      color: #fff;
+      margin-top: 6px;
+    }
+
+    /* Progress */
+    .progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--bg-input);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--student), var(--mentor));
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    /* Dialog Panel */
+    .dialog-thread {
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px dashed var(--border);
+    }
+
+    .dialog-thread:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+
+    .thread-header {
+      font-size: 10px;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .thread-id {
+      background: var(--bg-input);
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .message {
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+    }
+
+    .message-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .message-avatar.student {
+      background: rgba(163, 113, 247, 0.2);
+      color: var(--student);
+    }
+
+    .message-avatar.mentor {
+      background: rgba(63, 185, 80, 0.2);
+      color: var(--mentor);
+    }
+
+    .message-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .message-role {
+      font-size: 10px;
+      font-weight: 500;
+      margin-bottom: 2px;
+    }
+
+    .message-role.student { color: var(--student); }
+    .message-role.mentor { color: var(--mentor); }
+
+    .message-text {
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--text);
+    }
+
+    .message-meta {
+      font-size: 9px;
+      color: var(--text-dim);
+      margin-top: 2px;
+    }
+
+    /* Empty State */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-dim);
+      text-align: center;
+      padding: 20px;
+    }
+
+    .empty-icon {
+      font-size: 32px;
+      margin-bottom: 12px;
+      opacity: 0.5;
+    }
+
+    .empty-text {
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .empty-hint {
+      font-size: 10px;
+      opacity: 0.7;
+    }
+
+    /* Typing indicator */
+    .typing {
+      display: flex;
+      gap: 4px;
+      padding: 6px 0;
+    }
+
+    .typing span {
+      width: 5px;
+      height: 5px;
+      background: var(--text-dim);
+      border-radius: 50%;
+      animation: typing 1.4s infinite;
+    }
+
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typing {
+      0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+      30% { opacity: 1; transform: translateY(-3px); }
+    }
+
+    /* System Log Panel */
+    .log-entry {
+      font-size: 10px;
+      padding: 4px 0;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-time {
+      color: var(--text-dim);
+      flex-shrink: 0;
+      width: 55px;
+    }
+
+    .log-icon {
+      flex-shrink: 0;
+      width: 14px;
+      text-align: center;
+    }
+
+    .log-message {
+      flex: 1;
+      color: var(--text);
+      word-break: break-word;
+    }
+
+    .log-entry.info .log-icon { color: var(--accent); }
+    .log-entry.success .log-icon { color: var(--mentor); }
+    .log-entry.warning .log-icon { color: var(--warning); }
+    .log-entry.error .log-icon { color: var(--error); }
+    .log-entry.student .log-icon { color: var(--student); }
+    .log-entry.mentor .log-icon { color: var(--mentor); }
+    .log-entry.db .log-icon { color: var(--warning); }
+
+    .log-clear {
+      font-size: 9px;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .log-clear:hover {
+      background: var(--bg-input);
+      color: var(--text);
+    }
+
+    /* Export button */
+    .export-btn {
+      font-size: 9px;
+      padding: 4px 10px;
+      background: var(--mentor);
+      border: 1px solid var(--mentor);
+      border-radius: 3px;
+      color: #fff;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 500;
+    }
+
+    .export-btn:hover {
+      background: #4cc764;
+      border-color: #4cc764;
+    }
+
+    /* Nav link */
+    .nav-link {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 11px;
+      padding: 3px 6px;
+      border: 1px solid var(--border);
+      border-radius: 3px;
+    }
+
+    .nav-link:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>User Emulator <span style="font-size: 11px; color: var(--text-dim); font-weight: 400;">v0.3.1</span></h1>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <a href="index.html" class="nav-link">Test Runner</a>
+        <span class="status-badge" id="globalStatus">IDLE</span>
+      </div>
+    </header>
+
+    <div class="main-grid">
+      <!-- Config Panel -->
+      <div class="panel">
+        <div class="panel-header">Configuration</div>
+        <div class="panel-content">
+          <div class="config-section">
+            <div class="config-title">
+              <span class="dot student"></span>
+              Student Role
+            </div>
+            <label>Meta-prompt</label>
+            <textarea id="studentPrompt">You are a curious student learning programming. Ask questions, seek clarification, and try to understand concepts deeply. Be genuine in your confusion and curiosity.</textarea>
+          </div>
+
+          <div class="config-section">
+            <div class="config-title">
+              <span class="dot mentor"></span>
+              Mentor Role
+            </div>
+            <label>Meta-prompt</label>
+            <textarea id="mentorPrompt">You are an experienced programming mentor. Guide the student with questions rather than direct answers. Help them discover solutions themselves. Be patient and encouraging.</textarea>
+          </div>
+
+          <div class="config-section">
+            <div class="config-title">Settings</div>
+
+            <label>Mode</label>
+            <select id="emulationMode">
+              <option value="direct">Direct (OpenAI only)</option>
+              <option value="pipeline">Pipeline (MaaS Memory)</option>
+            </select>
+            <div style="font-size: 9px; color: var(--text-dim); margin-top: -4px; margin-bottom: 8px;" id="modeHint">
+              Direct: no memory between dialogs
+            </div>
+
+            <label>Topic</label>
+            <input type="text" id="topic" value="Understanding recursion in programming">
+
+            <div class="input-row">
+              <div>
+                <label>Dialogs</label>
+                <input type="number" id="dialogCount" value="1" min="1" max="10">
+              </div>
+              <div>
+                <label>Turns</label>
+                <input type="number" id="turnsCount" value="3" min="1" max="10">
+              </div>
+            </div>
+          </div>
+
+          <div class="config-section">
+            <button class="btn btn-primary" id="startBtn" onclick="startEmulation()">
+              Start Emulation
+            </button>
+            <button class="btn btn-stop" id="stopBtn" onclick="stopEmulation()" style="display: none;">
+              Stop
+            </button>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progressFill"></div>
+            </div>
+          </div>
+
+          <div class="config-section" style="margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border);">
+            <button class="btn" style="background: var(--bg-input); border: 1px solid var(--border);" onclick="resetToDefaults()">
+              Reset to Defaults
+            </button>
+            <div style="font-size: 9px; color: var(--text-dim); margin-top: 6px; text-align: center;" id="saveStatus">
+              Config auto-saves to browser
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dialog Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>Emulation Output</span>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button class="export-btn" id="exportBtn" onclick="exportToMarkdown()" style="display: none;">Export MD</button>
+            <span id="dialogStats" style="color: var(--text);">0 / 0</span>
+          </div>
+        </div>
+        <div class="panel-content" id="dialogContent">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon">S / M</div>
+            <div class="empty-text">No dialogs yet</div>
+            <div class="empty-hint">Configure and click "Start Emulation"</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- System Log Panel -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>System Log</span>
+          <span class="log-clear" onclick="clearLog()">clear</span>
+        </div>
+        <div class="panel-content" id="logContent">
+          <div class="log-entry info">
+            <span class="log-time">--:--:--</span>
+            <span class="log-icon">i</span>
+            <span class="log-message">Ready. Configure and start emulation.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let isRunning = false;
+    let abortController = null;
+    let pollInterval = null;
+    let lastEmulationData = null;
+
+    // Default values
+    const DEFAULTS = {
+      studentPrompt: 'You are a curious student learning programming. Ask questions, seek clarification, and try to understand concepts deeply. Be genuine in your confusion and curiosity.',
+      mentorPrompt: 'You are an experienced programming mentor. Guide the student with questions rather than direct answers. Help them discover solutions themselves. Be patient and encouraging.',
+      topic: 'Understanding recursion in programming',
+      mode: 'direct',
+      dialogCount: '1',
+      turnsCount: '3'
+    };
+
+    const STORAGE_KEY = 'maas_emulator_config';
+
+    // Load config from localStorage
+    function loadConfig() {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const config = JSON.parse(saved);
+          document.getElementById('studentPrompt').value = config.studentPrompt || DEFAULTS.studentPrompt;
+          document.getElementById('mentorPrompt').value = config.mentorPrompt || DEFAULTS.mentorPrompt;
+          document.getElementById('topic').value = config.topic || DEFAULTS.topic;
+          document.getElementById('emulationMode').value = config.mode || DEFAULTS.mode;
+          document.getElementById('dialogCount').value = config.dialogCount || DEFAULTS.dialogCount;
+          document.getElementById('turnsCount').value = config.turnsCount || DEFAULTS.turnsCount;
+
+          // Update mode hint
+          updateModeHint(config.mode || DEFAULTS.mode);
+
+          log('info', 'Loaded saved config from browser');
+          return true;
+        }
+      } catch (e) {
+        console.error('Failed to load config:', e);
+      }
+      return false;
+    }
+
+    // Save config to localStorage
+    function saveConfig() {
+      try {
+        const config = {
+          studentPrompt: document.getElementById('studentPrompt').value,
+          mentorPrompt: document.getElementById('mentorPrompt').value,
+          topic: document.getElementById('topic').value,
+          mode: document.getElementById('emulationMode').value,
+          dialogCount: document.getElementById('dialogCount').value,
+          turnsCount: document.getElementById('turnsCount').value
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+
+        // Show save indicator
+        const status = document.getElementById('saveStatus');
+        status.textContent = '✓ Saved';
+        status.style.color = 'var(--mentor)';
+        setTimeout(() => {
+          status.textContent = 'Config auto-saves to browser';
+          status.style.color = 'var(--text-dim)';
+        }, 1500);
+      } catch (e) {
+        console.error('Failed to save config:', e);
+      }
+    }
+
+    // Reset to defaults
+    function resetToDefaults() {
+      document.getElementById('studentPrompt').value = DEFAULTS.studentPrompt;
+      document.getElementById('mentorPrompt').value = DEFAULTS.mentorPrompt;
+      document.getElementById('topic').value = DEFAULTS.topic;
+      document.getElementById('emulationMode').value = DEFAULTS.mode;
+      document.getElementById('dialogCount').value = DEFAULTS.dialogCount;
+      document.getElementById('turnsCount').value = DEFAULTS.turnsCount;
+
+      updateModeHint(DEFAULTS.mode);
+
+      localStorage.removeItem(STORAGE_KEY);
+      log('info', 'Reset to default config');
+
+      const status = document.getElementById('saveStatus');
+      status.textContent = '✓ Reset to defaults';
+      status.style.color = 'var(--warning)';
+      setTimeout(() => {
+        status.textContent = 'Config auto-saves to browser';
+        status.style.color = 'var(--text-dim)';
+      }, 1500);
+    }
+
+    // Update mode hint
+    function updateModeHint(mode) {
+      const hint = document.getElementById('modeHint');
+      if (mode === 'pipeline') {
+        hint.textContent = 'Pipeline: Both roles use MaaS with memory';
+        hint.style.color = 'var(--mentor)';
+      } else {
+        hint.textContent = 'Direct: no memory between dialogs';
+        hint.style.color = 'var(--text-dim)';
+      }
+    }
+
+    // Auto-save on field changes
+    function setupAutoSave() {
+      const fields = ['studentPrompt', 'mentorPrompt', 'topic', 'emulationMode', 'dialogCount', 'turnsCount'];
+      fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          // Use 'input' for text fields, 'change' for select
+          const eventType = el.tagName === 'SELECT' ? 'change' : 'input';
+          el.addEventListener(eventType, () => {
+            saveConfig();
+          });
+        }
+      });
+    }
+
+    // Mode hint updates
+    document.getElementById('emulationMode').addEventListener('change', function() {
+      updateModeHint(this.value);
+    });
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadConfig();
+      setupAutoSave();
+    });
+
+    // Logging
+    function log(type, message) {
+      const logContent = document.getElementById('logContent');
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+
+      const icons = {
+        info: 'i',
+        success: '+',
+        warning: '!',
+        error: 'x',
+        student: 'S',
+        mentor: 'M',
+        db: 'D',
+        api: '>'
+      };
+
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.innerHTML = `
+        <span class="log-time">${time}</span>
+        <span class="log-icon">${icons[type] || '*'}</span>
+        <span class="log-message">${escapeHtml(message)}</span>
+      `;
+      logContent.appendChild(entry);
+      logContent.scrollTop = logContent.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('logContent').innerHTML = '';
+      log('info', 'Log cleared');
+    }
+
+    function updateStatus(status) {
+      const badge = document.getElementById('globalStatus');
+      badge.textContent = status;
+      badge.className = 'status-badge';
+      if (status === 'RUNNING') badge.classList.add('running');
+      if (status === 'COMPLETED') badge.classList.add('completed');
+      if (status === 'ERROR') {
+        badge.style.background = 'rgba(248, 81, 73, 0.15)';
+        badge.style.borderColor = '#f85149';
+        badge.style.color = '#f85149';
+      }
+    }
+
+    function updateProgress(current, total) {
+      const fill = document.getElementById('progressFill');
+      const stats = document.getElementById('dialogStats');
+      const percent = total > 0 ? (current / total) * 100 : 0;
+      fill.style.width = percent + '%';
+      stats.textContent = `${current} / ${total}`;
+    }
+
+    function createMessage(role, text, timestamp) {
+      const avatar = role === 'student' ? 'S' : 'M';
+      const roleName = role === 'student' ? 'Student' : 'Mentor';
+      const time = timestamp ? new Date(timestamp).toLocaleTimeString() : '';
+
+      return `
+        <div class="message">
+          <div class="message-avatar ${role}">${avatar}</div>
+          <div class="message-body">
+            <div class="message-role ${role}">${roleName}</div>
+            <div class="message-text">${escapeHtml(text)}</div>
+            <div class="message-meta">${time}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Poll server status
+    async function pollStatus() {
+      try {
+        const res = await fetch('/api/emulator/status');
+        const data = await res.json();
+        if (data.isEmulating) {
+          updateProgress(data.progress, data.total);
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    async function startEmulation() {
+      if (isRunning) return;
+
+      isRunning = true;
+      abortController = new AbortController();
+
+      const mode = document.getElementById('emulationMode').value;
+      const config = {
+        studentPrompt: document.getElementById('studentPrompt').value,
+        mentorPrompt: document.getElementById('mentorPrompt').value,
+        topic: document.getElementById('topic').value,
+        dialogCount: parseInt(document.getElementById('dialogCount').value),
+        turnsPerDialog: parseInt(document.getElementById('turnsCount').value),
+        mode: mode
+      };
+
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('stopBtn').style.display = 'block';
+      document.getElementById('emptyState').style.display = 'none';
+      document.getElementById('dialogContent').innerHTML = `
+        <div class="empty-state">
+          <div class="typing" style="justify-content: center;">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="empty-text">Generating...</div>
+        </div>
+      `;
+
+      updateStatus('RUNNING');
+      updateProgress(0, config.dialogCount);
+
+      // Log start
+      const modeLabel = mode === 'pipeline' ? 'PIPELINE (MaaS Memory)' : 'DIRECT (no memory)';
+      log('info', `Mode: ${modeLabel}`);
+      log('info', `Starting emulation: ${config.dialogCount} dialogs, ${config.turnsPerDialog} turns`);
+      log('info', `Topic: "${config.topic}"`);
+      log('api', 'POST /api/emulator/generate');
+
+      // Start polling
+      pollInterval = setInterval(pollStatus, 1000);
+
+      try {
+        const startTime = Date.now();
+
+        const response = await fetch('/api/emulator/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config),
+          signal: abortController.signal
+        });
+
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'API request failed');
+        }
+
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Generation failed');
+        }
+
+        log('success', `API responded in ${elapsed}s`);
+        log('info', `Mode used: ${data.mode || mode}`);
+        log('info', `Student ID: ${data.userIds.student.slice(0, 8)}...`);
+        log('info', `Mentor ID: ${data.userIds.mentor.slice(0, 8)}...`);
+        if (data.mode === 'pipeline') {
+          log('success', 'Mentor responses routed through MaaS pipeline with memory!');
+        }
+
+        // Store data for export
+        lastEmulationData = {
+          config,
+          mode: data.mode || mode,
+          userIds: data.userIds,
+          dialogs: data.dialogs,
+          timestamp: new Date().toISOString()
+        };
+        document.getElementById('exportBtn').style.display = 'block';
+
+        // Clear and render dialogs
+        document.getElementById('dialogContent').innerHTML = '';
+
+        data.dialogs.forEach((dialog, index) => {
+          updateProgress(index + 1, data.dialogs.length);
+          log('success', `Dialog #${index + 1} generated (${dialog.messages.length} messages)`);
+          renderDialog(dialog, index + 1);
+
+          // Log each message
+          dialog.messages.forEach(msg => {
+            log(msg.role, `${msg.content.slice(0, 50)}...`);
+            log('db', `Stored in raw_logs`);
+          });
+        });
+
+        log('success', `Emulation complete! ${data.dialogs.length} dialogs generated`);
+        updateStatus('COMPLETED');
+
+      } catch (error) {
+        if (error.name === 'AbortError') {
+          log('warning', 'Emulation aborted by user');
+          updateStatus('IDLE');
+        } else {
+          log('error', `Error: ${error.message}`);
+          document.getElementById('dialogContent').innerHTML = `
+            <div class="empty-state">
+              <div class="empty-icon" style="color: #f85149;">!</div>
+              <div class="empty-text">${escapeHtml(error.message)}</div>
+            </div>
+          `;
+          updateStatus('ERROR');
+        }
+      } finally {
+        clearInterval(pollInterval);
+        stopEmulation();
+      }
+    }
+
+    function renderDialog(dialog, dialogNumber) {
+      const threadId = `dialog-${dialog.dialog_id}`;
+      const threadHtml = `
+        <div class="dialog-thread" id="${threadId}">
+          <div class="thread-header">
+            <span class="thread-id">Dialog #${dialogNumber}</span>
+            <span>${escapeHtml(dialog.topic)}</span>
+          </div>
+        </div>
+      `;
+      document.getElementById('dialogContent').insertAdjacentHTML('beforeend', threadHtml);
+      const thread = document.getElementById(threadId);
+
+      dialog.messages.forEach(msg => {
+        thread.insertAdjacentHTML('beforeend', createMessage(msg.role, msg.content, msg.timestamp));
+      });
+
+      const content = document.getElementById('dialogContent');
+      content.scrollTop = content.scrollHeight;
+    }
+
+    function stopEmulation() {
+      if (abortController) {
+        abortController.abort();
+        abortController = null;
+      }
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+      isRunning = false;
+      document.getElementById('startBtn').disabled = false;
+      document.getElementById('stopBtn').style.display = 'none';
+    }
+
+    function exportToMarkdown() {
+      if (!lastEmulationData) return;
+
+      const { config, mode, userIds, dialogs, timestamp } = lastEmulationData;
+      const date = new Date(timestamp).toLocaleString();
+      const modeLabel = mode === 'pipeline' ? 'Pipeline (MaaS Memory)' : 'Direct (OpenAI only)';
+
+      let md = `# Emulation Export
+
+**Generated:** ${date}
+**Mode:** ${modeLabel}
+**Topic:** ${config.topic}
+**Dialogs:** ${dialogs.length}
+**Turns per dialog:** ${config.turnsPerDialog}
+
+---
+
+## Configuration
+
+### Student Meta-prompt
+\`\`\`
+${config.studentPrompt}
+\`\`\`
+
+### Mentor Meta-prompt
+\`\`\`
+${config.mentorPrompt}
+\`\`\`
+
+---
+
+## Session IDs
+- **Student:** \`${userIds.student}\`
+- **Mentor:** \`${userIds.mentor}\`
+
+---
+
+`;
+
+      dialogs.forEach((dialog, i) => {
+        md += `## Dialog ${i + 1}\n\n`;
+
+        dialog.messages.forEach(msg => {
+          const speaker = msg.role === 'student' ? 'Student' : 'Mentor';
+          const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+          md += `**${speaker}** *(${time})*: ${msg.content}\n\n`;
+        });
+
+        md += `---\n\n`;
+      });
+
+      md += `## Feedback Request
+
+Please analyze these dialogs and provide feedback on:
+
+1. **Natural flow** — Does the conversation feel natural?
+2. **Learning progression** — Does the student show understanding?
+3. **Mentoring quality** — Does the mentor guide effectively?
+4. **Topic coverage** — Is the topic explored adequately?
+5. **Improvements** — What could be better?
+
+---
+
+*Exported from MaaS User Emulator v0.3.0*
+`;
+
+      // Download
+      const blob = new Blob([md], { type: 'text/markdown' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `emulation-${Date.now()}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      log('success', 'Exported to markdown');
+    }
+  </script>
+</body>
+</html>

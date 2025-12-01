@@ -6,7 +6,7 @@
  * 2. Чтение recent conversation из raw_logs
  */
 
-import { pool } from '../src/utils/db';
+import { pool } from '../shared/db';
 
 async function testRawLogs() {
   try {

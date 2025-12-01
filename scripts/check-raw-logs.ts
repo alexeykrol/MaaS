@@ -2,7 +2,7 @@
  * Check raw_logs contents
  */
 
-import { pool } from '../src/utils/db';
+import { pool } from '../shared/db';
 
 async function checkRawLogs() {
   try {
